@@ -16,7 +16,7 @@ class FingerPosition(Enum):
 class FingerState:
     deviation: float
     position: FingerPosition
-    tip: tuple[float, float]
+    tip: tuple[float, float, float]
 
 
 FINGERS = {
@@ -53,7 +53,7 @@ class FingerClassifier:
         return FingerState(
             deviation=deviation,
             position=position,
-            tip=(tip.x, tip.y),
+            tip=(tip.x, tip.y, tip.z),
         )
 
     def classify_all(self, hand) -> dict[str, FingerState]:

@@ -1,7 +1,5 @@
-﻿import cv2
-import time
-from custom_overlay import invoker_overlay
-from custom_overlay.invoker_overlay import InvokerOverlay
+﻿import time
+import cv2
 
 
 class Application:
@@ -17,6 +15,7 @@ class Application:
         gesture_handler,
         image_overlay,
         invoker_overlay,
+        profile=False,
     ):
         self.camera = camera
         self.tracker = tracker
@@ -26,53 +25,67 @@ class Application:
         self.gesture_handler = gesture_handler
         self.image_overlay = image_overlay
         self.invoker_overlay = invoker_overlay
+        self.profile = profile
 
     def run(self):
-        while True:
-            frame = self.camera.read()
+        timings = {"read": 0.0, "track": 0.0, "logic": 0.0, "show": 0.0}
+        frames = 0
+        last_report = time.perf_counter()
+        pc = time.perf_counter
 
+        while True:
+            t0 = pc()
+            frame = self.camera.read()
             if frame is None:
                 break
+            t1 = pc()
 
-            result = self.tracker.detect(frame)
+            tracking = self.tracker.detect(frame)
+            t2 = pc()
 
-            self.drawer.draw(
-                frame,
-                result.hand_landmarks,
-            )
-
-            frame = cv2.flip(frame, 1)
+            self.drawer.draw(frame, tracking.hand_landmarks)
+            cv2.flip(frame, 1, dst=frame)  # in place, no new allocation
 
             for hand, handedness in zip(
-                result.hand_landmarks,
-                result.handedness,
+                tracking.hand_landmarks,
+                tracking.handedness,
             ):
                 side = handedness[0].category_name
+                state = self.detector.update(hand, side)
+                self.debug_overlay.update(frame, state)
 
-                state = self.detector.update(
-                    hand,
-                    side,
-                )
-
-                self.debug_overlay.update(
-                    frame,
-                    state,
-                )
-
-                result = self.gesture_handler.handle(state)
-
-                if result is not None:
-                    self.invoker_overlay.addCommand(result)
-
-                    if result == 'r':
+                command = self.gesture_handler.handle(state)
+                if command is not None:
+                    self.invoker_overlay.addCommand(command)
+                    if command == "r":
                         self.invoker_overlay.pollResult()
 
-                frame = self.invoker_overlay.handleDisplay(frame)
-
+            # Once per frame, even when no hands are visible
+            frame = self.invoker_overlay.handleDisplay(frame)
+            t3 = pc()
 
             cv2.imshow("Hand Tracking", frame)
+            key = cv2.waitKey(1) & 0xFF
+            t4 = pc()
 
-            if cv2.waitKey(1) & 0xFF == ord("q"):
+            if self.profile:
+                timings["read"] += t1 - t0
+                timings["track"] += t2 - t1
+                timings["logic"] += t3 - t2
+                timings["show"] += t4 - t3
+                frames += 1
+                if t4 - last_report >= 2.0:
+                    avg = {k: v / frames * 1000 for k, v in timings.items()}
+                    fps = frames / (t4 - last_report)
+                    print(
+                        f"{fps:5.1f} fps | "
+                        + " | ".join(f"{k} {v:5.1f}ms" for k, v in avg.items())
+                    )
+                    timings = {k: 0.0 for k in timings}
+                    frames = 0
+                    last_report = t4
+
+            if key == ord("q"):
                 break
 
         self.close()

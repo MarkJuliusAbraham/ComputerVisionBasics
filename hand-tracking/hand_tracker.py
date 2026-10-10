@@ -13,7 +13,7 @@ class HandTracker:
     def __init__(
         self,
         model_path=MODEL_PATH,
-        num_hands=2,
+        num_hands=1,
     ):
         options = mp.tasks.vision.HandLandmarkerOptions(
             base_options=mp.tasks.BaseOptions(

@@ -1,11 +1,13 @@
 ﻿import math
 
+from camera import Camera  # adjust to your actual module path
+
 
 def vector(a, b):
     return (
-        b.x - a.x,
-        b.y - a.y,
-        b.z - a.z,
+        (b.x - a.x) * Camera.aspect,
+        (b.y - a.y),
+        (b.z - a.z) * Camera.aspect,
     )
 
 
