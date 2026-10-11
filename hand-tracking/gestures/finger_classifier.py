@@ -29,9 +29,10 @@ FINGERS = {
 
 
 class FingerClassifier:
-    STRAIGHT_THRESHOLD = 15.0
-    CURLED_THRESHOLD = 45.0
-    CLOSED_THRESHOLD = 75.0
+    def __init__(self, straight_threshold, curled_threshold, closed_threshold):
+        self.straight_threshold = straight_threshold
+        self.curled_threshold = curled_threshold
+        self.closed_threshold = closed_threshold
 
     def classify(self, hand, indices) -> FingerState:
         mcp, pip, dip, tip = (
@@ -41,11 +42,11 @@ class FingerClassifier:
 
         deviation = self.deviation(hand, indices)
 
-        if deviation <= self.STRAIGHT_THRESHOLD:
+        if deviation <= self.straight_threshold:
             position = FingerPosition.STRAIGHT
-        elif deviation >= self.CLOSED_THRESHOLD:
+        elif deviation >= self.closed_threshold:
             position = FingerPosition.CLOSED
-        elif deviation >= self.CURLED_THRESHOLD:
+        elif deviation >= self.curled_threshold:
             position = FingerPosition.CURLED
         else:
             position = FingerPosition.PARTIAL

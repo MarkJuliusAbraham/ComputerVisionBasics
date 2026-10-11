@@ -19,12 +19,21 @@ class GestureState:
         )
 
 class Detector:
-    def __init__(self):
-        self._finger_classifier = FingerClassifier()
-        self._gesture_detector = GestureDetector()
+    def __init__(self, settings):
         self._palm_detector = PalmDetector()
-
         self._previous_gestures: dict[str, Pinching | None] = {}
+        self.configure(settings)
+
+    def configure(self, settings):
+        self._finger_classifier = FingerClassifier(
+            settings.finger_straight_threshold,
+            settings.finger_curled_threshold,
+            settings.finger_closed_threshold,
+        )
+        self._gesture_detector = GestureDetector(
+            settings.pinch_distance_threshold,
+            settings.pinch_release_factor,
+        )
 
     def update(self, hand, handedness: str) -> GestureState:
         fingers = self._finger_classifier.classify_all(hand)

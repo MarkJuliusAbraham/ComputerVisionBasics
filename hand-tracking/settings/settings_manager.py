@@ -8,6 +8,13 @@ DEFAULT_PATH = os.path.join(
 
 THEMES = ("Light", "Dark")
 UI_SCALES = ("Auto", "100%", "125%", "150%", "175%", "200%")
+NUMERIC_SETTINGS = {
+    "finger_straight_threshold": (0.0, 120.0, 1.0),
+    "finger_curled_threshold": (0.0, 120.0, 1.0),
+    "finger_closed_threshold": (0.0, 120.0, 1.0),
+    "pinch_distance_threshold": (0.01, 0.20, 0.01),
+    "pinch_release_factor": (1.0, 2.0, 0.05),
+}
 
 
 @dataclass
@@ -18,6 +25,11 @@ class SettingsData:
     profile: bool = True
     theme: str = "Light"
     ui_scale: str = "Auto"
+    finger_straight_threshold: float = 15.0
+    finger_curled_threshold: float = 45.0
+    finger_closed_threshold: float = 75.0
+    pinch_distance_threshold: float = 0.05
+    pinch_release_factor: float = 1.1
 
     def to_dict(self):
         return asdict(self)
@@ -25,7 +37,24 @@ class SettingsData:
     @classmethod
     def from_dict(cls, values):
         fields = cls.__dataclass_fields__
-        return cls(**{key: value for key, value in values.items() if key in fields})
+        data = {key: value for key, value in values.items() if key in fields}
+        defaults = cls()
+        for key, (minimum, maximum, _) in NUMERIC_SETTINGS.items():
+            try:
+                value = float(data.get(key, getattr(defaults, key)))
+            except (TypeError, ValueError):
+                value = getattr(defaults, key)
+            if not minimum <= value <= maximum:
+                value = getattr(defaults, key)
+            data[key] = value
+        return cls(**data)
+
+    def has_valid_finger_thresholds(self):
+        return (
+            self.finger_straight_threshold
+            < self.finger_curled_threshold
+            < self.finger_closed_threshold
+        )
 
 
 DEFAULTS = SettingsData()
@@ -67,6 +96,13 @@ class Settings:
         for key, allowed in CHOICES.items():
             if getattr(self.data, key) not in allowed:
                 setattr(self.data, key, getattr(DEFAULTS, key))
+        if not self.data.has_valid_finger_thresholds():
+            for key in (
+                "finger_straight_threshold",
+                "finger_curled_threshold",
+                "finger_closed_threshold",
+            ):
+                setattr(self.data, key, getattr(DEFAULTS, key))
 
     def get(self, key):
         return getattr(self.data, key, None)
@@ -79,7 +115,10 @@ class Settings:
         self.set(key, not self.get(key))
 
     def update(self, data):
-        self.data = data if isinstance(data, SettingsData) else SettingsData.from_dict(data)
+        updated = data if isinstance(data, SettingsData) else SettingsData.from_dict(data)
+        if not updated.has_valid_finger_thresholds():
+            raise ValueError("Finger thresholds must increase from straight to closed")
+        self.data = updated
         self.save()
 
     def save(self):

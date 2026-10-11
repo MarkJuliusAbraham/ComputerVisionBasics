@@ -22,7 +22,7 @@ def main():
         tracker = HandTracker()
         drawer = HandDrawer()
         debug_overlay = DebugOverlay()
-        detector = Detector()
+        detector = Detector(settings.data)
         invoker_overlay = InvokerOverlay()
         gesture_handler = GestureHandler(invoker_overlay)
         image_overlay = ImageOverlay()

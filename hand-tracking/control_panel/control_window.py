@@ -1,11 +1,19 @@
 import tkinter as tk
 from tkinter import filedialog, ttk
 
-from control_panel.theme import apply_theme, resolve_scale
+from control_panel.theme import (
+    apply_theme,
+    resolve_scale,
+)
+from control_panel.deviation_bar import DeviationBar
+from control_panel.finger_threshold_control import FingerThresholdControl
 from control_panel.unapplied_changes_dialog import UnappliedChangesDialog
-from settings.settings_manager import Settings, SettingsData, THEMES, UI_SCALES
+from gestures.finger_classifier import FingerPosition, FingerState
+from settings.settings_manager import (
+    NUMERIC_SETTINGS, Settings, SettingsData, THEMES, UI_SCALES,
+)
 
-BASE_SIZE = (640, 600)  # window size in pixels at 100%
+BASE_SIZE = (760, 620)  # window size in pixels at 100%
 
 class ControlWindow:
     """Control panel with Main and Settings tabs."""
@@ -19,16 +27,25 @@ class ControlWindow:
         on_apply=None,
         camera_index=0,
         on_camera_switch=None,
+        on_toggle_tracking=None,
     ):
         self.on_settings_path = on_settings_path
         self.on_apply = on_apply
+        self.on_close = on_close
         self.on_camera_switch = on_camera_switch
+        self.on_toggle_tracking = on_toggle_tracking
         self.camera_index = camera_index
         self._camera_active = False
         self._camera_switching = True
         self._baseline = SettingsData()
+        self._max_deviation = settings.data.finger_closed_threshold
+        self._test_deviation_visible = False
+        self._latest_preview_fingers = None
+        self._preview_tracking_state = "No hand detected"
 
         self.root = tk.Tk()
+        self._default_callback_exception = self.root.report_callback_exception
+        self.root.report_callback_exception = self._report_callback_exception
         self.root.title("Controls")
         self.root.resizable(False, False)
         self._scale = None  # last applied scale, set by _apply_display
@@ -46,10 +63,19 @@ class ControlWindow:
         actions = ttk.Frame(main_tab)
         actions.pack(fill="x", padx=20, pady=(14, 2))
         ttk.Button(actions, text="Restart", command=on_restart).pack(
-            side="left", fill="x", expand=True, padx=(0, 5)
+            side="left", fill="x", expand=True, padx=(0, 4)
         )
         ttk.Button(actions, text="Exit", command=on_close).pack(
-            side="left", fill="x", expand=True, padx=(5, 0)
+            side="left", fill="x", expand=True, padx=(4, 0)
+        )
+        pause_row = ttk.Frame(main_tab)
+        pause_row.pack(fill="x", padx=20, pady=(2, 4))
+        self.pause_tracking_button = ttk.Button(
+            pause_row, text="Pause tracking", command=self._toggle_tracking,
+            width=24,
+        )
+        self.pause_tracking_button.pack(
+            anchor="center", pady=(0, 4)
         )
 
         camera_section = ttk.LabelFrame(
@@ -81,7 +107,7 @@ class ControlWindow:
         )
         gesture_section.pack(fill="both", expand=True, padx=20, pady=(2, 14))
         self.gesture_enabled = tk.StringVar(value="Waiting for camera…")
-        ttk.Label(gesture_section, textvariable=self.gesture_enabled).pack(
+        ttk.Label(gesture_section, textvariable=self.gesture_enabled, width=36).pack(
             anchor="w", pady=(0, 5)
         )
         hands_row = ttk.Frame(gesture_section)
@@ -96,40 +122,28 @@ class ControlWindow:
             values = {
                 "palm": tk.StringVar(value="—"),
                 "gesture": tk.StringVar(value="—"),
-                "pinch": tk.StringVar(value="—"),
-                "fingers": {},
+                "pinch": tk.StringVar(value="—\n—\n—"),
+                "deviation_bar": None,
             }
             ttk.Label(panel, text="Palm").grid(row=0, column=0, sticky="w")
-            ttk.Label(panel, textvariable=values["palm"]).grid(row=0, column=1, sticky="w")
+            ttk.Label(panel, textvariable=values["palm"], width=19).grid(row=0, column=1, columnspan=2, sticky="w")
             ttk.Label(panel, text="Command").grid(row=1, column=0, sticky="w")
-            ttk.Label(panel, textvariable=values["gesture"]).grid(row=1, column=1, sticky="w")
+            ttk.Label(panel, textvariable=values["gesture"], width=19).grid(row=1, column=1, columnspan=2, sticky="w")
             ttk.Label(panel, text="Pinch").grid(row=2, column=0, sticky="nw")
             ttk.Label(
-                panel, textvariable=values["pinch"], wraplength=220, justify="left"
+                panel, textvariable=values["pinch"], width=31,
+                wraplength=220, justify="left", anchor="w",
             ).grid(row=2, column=1, columnspan=2, sticky="w")
             ttk.Separator(panel, orient="horizontal").grid(
-                row=3, column=0, columnspan=3, sticky="ew", pady=3
+                row=3, column=0, columnspan=3, sticky="ew", pady=4
             )
-            ttk.Label(panel, text="Finger").grid(row=4, column=0, sticky="w")
-            ttk.Label(panel, text="Deviation").grid(row=4, column=1, sticky="w")
-            ttk.Label(panel, text="Score / class").grid(row=4, column=2, sticky="w")
+            deviation_bar = DeviationBar(
+                panel, theme_name=settings.data.theme,
+                max_deviation=self._max_deviation,
+            )
+            deviation_bar.grid(row=4, column=0, columnspan=3, sticky="ew")
+            values["deviation_bar"] = deviation_bar
             panel.columnconfigure(1, weight=1)
-            for row, finger_name in enumerate(
-                ("thumb", "index", "middle", "ring", "pinky"), start=5
-            ):
-                finger_value = tk.StringVar(value="—")
-                bar = ttk.Progressbar(
-                    panel, mode="determinate", maximum=75, length=100
-                )
-                values["fingers"][finger_name] = {
-                    "text": finger_value,
-                    "bar": bar,
-                }
-                ttk.Label(panel, text=finger_name.title()).grid(row=row, column=0, sticky="w")
-                bar.grid(row=row, column=1, sticky="ew", padx=(3, 6), pady=2)
-                ttk.Label(panel, textvariable=finger_value).grid(
-                    row=row, column=2, sticky="w"
-                )
             self.gesture_display[handedness] = values
 
         # Topic navigation stays on the left while the selected page fills the rest.
@@ -165,6 +179,11 @@ class ControlWindow:
             "Tracking": ("Hand tracking behavior and diagnostics", [
                 ("track_hands", "Track hands", None),
                 ("profile", "Print FPS to console", None),
+                ("finger_straight_threshold", "Straight finger threshold (°)", "number"),
+                ("finger_curled_threshold", "Curled finger threshold (°)", "number"),
+                ("finger_closed_threshold", "Closed finger threshold (°)", "number"),
+                ("pinch_distance_threshold", "Pinch distance threshold", "number"),
+                ("pinch_release_factor", "Pinch release factor", "number"),
             ]),
             "Appearance": ("Choose the application theme and display scale", [
                 ("theme", "Theme", THEMES),
@@ -172,6 +191,11 @@ class ControlWindow:
             ]),
         }
         self.topic_descriptions = {}
+        finger_threshold_keys = (
+            "finger_straight_threshold",
+            "finger_curled_threshold",
+            "finger_closed_threshold",
+        )
         for topic, (description, items) in topics.items():
             page = ttk.Frame(self.settings_content)
             self.topic_pages[topic] = page
@@ -179,6 +203,9 @@ class ControlWindow:
             group = ttk.LabelFrame(page, text=topic, padding=(12, 8, 12, 10))
             group.pack(fill="x", anchor="n")
             for key, label, options in items:
+                if key in finger_threshold_keys:
+                    self.vars[key] = tk.DoubleVar()
+                    continue
                 row = ttk.Frame(group)
                 row.pack(fill="x", pady=8)
                 if options is None:
@@ -187,6 +214,16 @@ class ControlWindow:
                         row, text=label, variable=var,
                         command=self._refresh_apply_state,
                     ).pack(anchor="w")
+                elif key in NUMERIC_SETTINGS:
+                    minimum, maximum, step = NUMERIC_SETTINGS[key]
+                    var = tk.DoubleVar()
+                    ttk.Label(row, text=label).pack(side="left", fill="x", expand=True)
+                    spinbox = ttk.Spinbox(
+                        row, textvariable=var, from_=minimum, to=maximum,
+                        increment=step, width=9, command=self._refresh_apply_state,
+                    )
+                    spinbox.pack(side="right")
+                    var.trace_add("write", lambda *_: self._refresh_apply_state())
                 else:
                     var = tk.StringVar()
                     ttk.Label(row, text=label).pack(anchor="w", pady=(0, 4))
@@ -200,6 +237,41 @@ class ControlWindow:
                         lambda e: self._refresh_apply_state(),
                     )
                 self.vars[key] = var
+
+            if topic == "Tracking":
+                ttk.Label(
+                    group, text="Finger deviation ranges",
+                ).pack(anchor="w", pady=(12, 2))
+                self.finger_threshold_control = FingerThresholdControl(
+                    group,
+                    self.vars["finger_straight_threshold"],
+                    self.vars["finger_curled_threshold"],
+                    self.vars["finger_closed_threshold"],
+                    on_change=self._on_finger_threshold_change,
+                )
+                self.finger_threshold_control.pack(fill="x", pady=(0, 6))
+                self.test_deviation_button = ttk.Button(
+                    group, text="Test deviation", command=self._toggle_test_deviation,
+                )
+                self.test_deviation_button.pack(anchor="w", pady=(2, 6))
+                self.test_deviation_status = tk.StringVar(value="No hand detected")
+                self.test_deviation_status_label = ttk.Label(
+                    group, textvariable=self.test_deviation_status,
+                )
+                self.test_deviation_status_label.pack(anchor="w", pady=(0, 2))
+                self.test_deviation_status_label.pack_forget()
+                self.test_deviation_bar = DeviationBar(
+                    group, theme_name=settings.data.theme,
+                    max_deviation=self._max_deviation,
+                )
+                self.test_deviation_bar.pack(fill="x", pady=(0, 6))
+                self.test_deviation_bar.pack_forget()
+
+        self.tracking_error = tk.StringVar()
+        ttk.Label(
+            self.topic_pages["Tracking"], textvariable=self.tracking_error,
+            wraplength=300,
+        ).pack(anchor="w", pady=(8, 0))
 
         advanced_page = ttk.Frame(self.settings_content)
         self.topic_pages["Advanced"] = advanced_page
@@ -264,6 +336,13 @@ class ControlWindow:
 
         self.root.protocol("WM_DELETE_WINDOW", on_close)
 
+    def _report_callback_exception(self, exception, value, traceback):
+        """Treat IDE shutdown interrupts as a request to close the application."""
+        if issubclass(exception, KeyboardInterrupt):
+            self.on_close()
+            return
+        self._default_callback_exception(exception, value, traceback)
+
     # ---- pending-change tracking ----
 
     def get_values(self):
@@ -279,6 +358,48 @@ class ControlWindow:
             self.apply_button.state(["!disabled"])
         else:
             self.apply_button.state(["disabled"])
+
+    def _on_finger_threshold_change(self):
+        self._refresh_apply_state()
+        if self._test_deviation_visible:
+            self._render_test_deviation()
+
+    def _toggle_test_deviation(self):
+        self._test_deviation_visible = not self._test_deviation_visible
+        if self._test_deviation_visible:
+            self.test_deviation_status_label.pack(anchor="w", pady=(0, 2))
+            self.test_deviation_bar.pack(fill="x", pady=(0, 6))
+            self.test_deviation_button.configure(text="Hide test")
+            self._render_test_deviation()
+        else:
+            self.test_deviation_bar.pack_forget()
+            self.test_deviation_status_label.pack_forget()
+            self.test_deviation_button.configure(text="Test deviation")
+
+    def _render_test_deviation(self):
+        values = self.get_values()
+        thresholds = (
+            values.finger_straight_threshold,
+            values.finger_curled_threshold,
+            values.finger_closed_threshold,
+        )
+        fingers = {}
+        for name, finger in (self._latest_preview_fingers or {}).items():
+            deviation = finger.deviation
+            if deviation <= thresholds[0]:
+                position = FingerPosition.STRAIGHT
+            elif deviation >= thresholds[2]:
+                position = FingerPosition.CLOSED
+            elif deviation >= thresholds[1]:
+                position = FingerPosition.CURLED
+            else:
+                position = FingerPosition.PARTIAL
+            fingers[name] = FingerState(deviation, position, finger.tip)
+
+        self.test_deviation_status.set(self._preview_tracking_state)
+        self.test_deviation_bar.set_data(
+            fingers or None, self._theme_name, values.finger_closed_threshold
+        )
 
     def show_topic(self, topic):
         """Display the selected settings topic in the content pane."""
@@ -317,6 +438,15 @@ class ControlWindow:
         self.camera_status.set(f"Opening camera {index}…")
         self.on_camera_switch(index)
 
+    def _toggle_tracking(self):
+        if self.on_toggle_tracking:
+            self.on_toggle_tracking()
+
+    def set_tracking_paused(self, paused):
+        self.pause_tracking_button.configure(
+            text="Resume tracking" if paused else "Pause tracking"
+        )
+
     def update_camera_state(self, state, requested, active, message=None):
         """Reflect the capture worker's latest status in the camera controls."""
         if state in ("opening", "switching"):
@@ -339,14 +469,29 @@ class ControlWindow:
                 self.camera_var.set(str(active))
             self.camera_status.set(message or f"Could not open camera {requested}")
 
-    def update_gesture_display(self, hand_states, enabled=True):
+    def update_gesture_display(self, hand_states, enabled=True, paused=False):
         """Render the latest classified hand data in the Main tab."""
         if not enabled:
             self.gesture_enabled.set("Tracking disabled")
+        elif paused:
+            self.gesture_enabled.set("Tracking paused")
         elif not hand_states:
             self.gesture_enabled.set("No hands detected")
         else:
             self.gesture_enabled.set("Tracking active")
+
+        preview_record = hand_states[0] if hand_states else None
+        self._latest_preview_fingers = (
+            preview_record["state"].fingers if preview_record else None
+        )
+        self._preview_tracking_state = (
+            "Tracking disabled" if not enabled else
+            "Tracking paused" if paused else
+            "No hand detected" if preview_record is None else
+            f"Live data · {preview_record['handedness']} hand"
+        )
+        if self._test_deviation_visible:
+            self._render_test_deviation()
 
         for handedness, values in self.gesture_display.items():
             record = next(
@@ -356,36 +501,33 @@ class ControlWindow:
             if record is None:
                 values["palm"].set("—")
                 values["gesture"].set("—")
-                values["pinch"].set("—")
-                for finger_display in values["fingers"].values():
-                    finger_display["text"].set("—")
-                    finger_display["bar"].configure(value=0)
+                values["pinch"].set("—\n—\n—")
+                values["deviation_bar"].set_data(
+                    None, self._theme_name, self._max_deviation
+                )
                 continue
 
             state = record["state"]
             values["palm"].set(state.palm.value.replace("_", " ").title())
             values["gesture"].set(record["command"] or "—")
             if state.gesture is None:
-                values["pinch"].set("No pinch")
+                values["pinch"].set("—\n—\n—")
             else:
                 pinch = state.gesture
                 values["pinch"].set(
-                    f"d {pinch.distance:.3f}\n"
-                    f"start ({pinch.start_pos[0]:.2f}, {pinch.start_pos[1]:.2f})\n"
-                    f"now ({pinch.current_pos[0]:.2f}, {pinch.current_pos[1]:.2f})"
+                    f"d:     {pinch.distance:.3f}\n"
+                    f"start: {pinch.start_pos[0]:.2f}, {pinch.start_pos[1]:.2f}\n"
+                    f"now:   {pinch.current_pos[0]:.2f}, {pinch.current_pos[1]:.2f}"
                 )
-            for finger_name, finger in state.fingers.items():
-                finger_display = values["fingers"][finger_name]
-                finger_display["text"].set(
-                    f"{finger.deviation:.1f}° / {finger.position.value}"
-                )
-                finger_display["bar"].configure(
-                    value=min(max(finger.deviation, 0.0), 75.0)
-                )
+            values["deviation_bar"].set_data(
+                state.fingers, self._theme_name, self._max_deviation
+            )
 
     def show_settings(self, settings):
         """Refresh the path field and all widgets from a Settings object."""
         self.path_var.set(settings.path)
+        self._max_deviation = settings.data.finger_closed_threshold
+        self.tracking_error.set("")
         for key, var in self.vars.items():
             value = getattr(settings.data, key)
             var.set(bool(value) if isinstance(var, tk.BooleanVar) else value)
@@ -396,8 +538,16 @@ class ControlWindow:
 
     def apply(self):
         values = self.get_values()
+        if not values.has_valid_finger_thresholds():
+            self.tracking_error.set(
+                "Thresholds must increase: straight < curled < closed."
+            )
+            self.show_topic("Tracking")
+            return
+        self.tracking_error.set("")
         if self.on_apply:
             self.on_apply(values)
+        self._max_deviation = values.finger_closed_threshold
         self._apply_display(values.theme, values.ui_scale)
         self._style_nav()
         self._baseline = values
@@ -420,6 +570,8 @@ class ControlWindow:
         """Revert the widgets to the baseline."""
         for key, var in self.vars.items():
             var.set(getattr(self._baseline, key))
+        self.tracking_error.set("")
+        self._max_deviation = self._baseline.finger_closed_threshold
         self._refresh_apply_state()
 
     # ---- leaving the Settings tab ----
@@ -487,3 +639,8 @@ class ControlWindow:
             self.root.geometry(
                 f"{int(BASE_SIZE[0] * scale)}x{int(BASE_SIZE[1] * scale)}"
             )
+        self._theme_name = theme
+        self.finger_threshold_control.set_theme(theme)
+        self.test_deviation_bar.set_theme(theme)
+        for values in self.gesture_display.values():
+            values["deviation_bar"].set_theme(theme)

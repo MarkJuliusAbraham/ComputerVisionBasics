@@ -37,6 +37,7 @@ class Application:
 
         self.running = True
         self.restart_requested = False
+        self.tracking_paused = False
         self._camera_ui_state = None
         self._gesture_display_updated = 0.0
         self._latest_hand_states = []
@@ -48,11 +49,13 @@ class Application:
             on_apply=self.apply_changes,
             camera_index=self.camera.requested_index,
             on_camera_switch=self.camera.request_switch,
+            on_toggle_tracking=self.toggle_tracking,
         )
 
 
     def apply_settings(self):
         """Copy values from the settings object onto the app."""
+        self.detector.configure(self.settings.data)
         self.track_hands = self.settings.data.track_hands
         self.profile = self.settings.data.profile
         self.theme = self.settings.data.theme
@@ -77,12 +80,20 @@ class Application:
         self.running = False
         self.control_window.quit()
 
+    def toggle_tracking(self):
+        self.tracking_paused = not self.tracking_paused
+        self.control_window.set_tracking_paused(self.tracking_paused)
+
     def run(self):
         self._frames = 0
         self._last_report = time.perf_counter()
-        self.control_window.after(0, self._process_frame)
-        self.control_window.run()
-        self.close()
+        try:
+            self.control_window.after(0, self._process_frame)
+            self.control_window.run()
+        except KeyboardInterrupt:
+            self.running = False
+        finally:
+            self.close()
 
     def _process_frame(self):
         """Process one frame, then yield to Tk's event loop."""
@@ -102,7 +113,7 @@ class Application:
             self.request_quit()
             return
 
-        if self.track_hands:
+        if self.track_hands and not self.tracking_paused:
             tracking = self.tracker.detect(frame)
             self.drawer.draw(frame, tracking.hand_landmarks)
             cv2.flip(frame, 1, dst=frame)  # in place, no new allocation
@@ -114,7 +125,9 @@ class Application:
         now = time.monotonic()
         if now - self._gesture_display_updated >= 0.1:
             self.control_window.update_gesture_display(
-                self._latest_hand_states, enabled=self.track_hands
+                self._latest_hand_states,
+                enabled=self.track_hands,
+                paused=self.tracking_paused,
             )
             self._gesture_display_updated = now
 

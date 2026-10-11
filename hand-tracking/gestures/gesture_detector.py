@@ -15,8 +15,9 @@ class GestureDetector:
     THUMB_TIP = 4
     INDEX_TIP = 8
 
-    PINCH_DISTANCE_THRESHOLD = 0.05
-    PINCH_RELEASE_FACTOR = 1.1
+    def __init__(self, distance_threshold, release_factor):
+        self.distance_threshold = distance_threshold
+        self.release_factor = release_factor
 
     def detect(
         self,
@@ -30,10 +31,10 @@ class GestureDetector:
             include_z=False,
         )
 
-        threshold = self.PINCH_DISTANCE_THRESHOLD
+        threshold = self.distance_threshold
 
         if previous is not None:
-            threshold *= self.PINCH_RELEASE_FACTOR
+            threshold *= self.release_factor
 
         is_pinching = (
             distance_between_fingers < threshold

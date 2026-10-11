@@ -7,6 +7,24 @@ import sv_ttk
 # Our setting values -> sv-ttk's names
 _MODES = {"Light": "light", "Dark": "dark"}
 
+# Semantic gesture colors are defined with the app theme so labels stay readable
+# on both theme backgrounds. Widgets request these styles by classification.
+_GESTURE_COLORS = {
+    "Light": {
+        "straight": "#1e7e34",
+        "partial": "#8a6100",
+        "curled": "#b54708",
+        "closed": "#c5221f",
+    },
+    "Dark": {
+        "straight": "#81c995",
+        "partial": "#fdd663",
+        "curled": "#ffb77c",
+        "closed": "#f28b82",
+    },
+}
+_GESTURE_BAR_BACKGROUNDS = {"Light": "#a0a0a0", "Dark": "#595959"}
+
 BASE_FONT_SIZE = 9            # points at 100%
 BASE_BUTTON_PADDING = (8, 3)  # pixels at 100%
 
@@ -29,6 +47,19 @@ def resolve_scale(root, value):
     if value == "Auto":
         return system
     return int(value.rstrip("%")) / 100
+
+
+def gesture_classification_color(theme_name, classification):
+    """Return the active theme's semantic color for a finger classification."""
+    palette = _GESTURE_COLORS.get(theme_name, _GESTURE_COLORS["Light"])
+    return palette.get(classification, palette["straight"])
+
+
+def gesture_bar_background(theme_name):
+    """Return the theme's subdued track color for deviation bars."""
+    return _GESTURE_BAR_BACKGROUNDS.get(
+        theme_name, _GESTURE_BAR_BACKGROUNDS["Light"]
+    )
 
 
 def apply_theme(root, name, scale=1.0):
