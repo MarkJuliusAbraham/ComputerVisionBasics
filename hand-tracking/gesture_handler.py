@@ -14,7 +14,7 @@ class GestureHandler:
     ENABLE_REPEAT = True
 
     # Horizontal-plane (X/Z) distance required between repeat triggers.
-    X_REPEAT_THRESHOLD = 0.03
+    X_REPEAT_THRESHOLD = 0.09
 
     # Z is a noisy model estimate, so it counts for less than X.
     # Set to 0 to get X-only behavior.
@@ -276,7 +276,7 @@ class GestureHandler:
             and state.fingers["index"].position != FingerPosition.STRAIGHT
             and state.fingers["middle"].position == FingerPosition.STRAIGHT
             and state.fingers["ring"].position == FingerPosition.STRAIGHT
-            and state.fingers["pinky"].position != FingerPosition.STRAIGHT
+            and state.fingers["pinky"].position == FingerPosition.STRAIGHT
         )
 
     def handleE(self, state: GestureState):
@@ -298,7 +298,7 @@ class GestureHandler:
         )
 
         return (
-            sum(p == FingerPosition.STRAIGHT for p in positions) >= 3
+            sum(p == FingerPosition.STRAIGHT for p in positions) >= 4
             and all(
                 p in (FingerPosition.PARTIAL, FingerPosition.STRAIGHT)
                 for p in positions
