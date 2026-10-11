@@ -161,8 +161,6 @@ class Application:
                 "state": state,
                 "command": command,
             })
-            if command is not None:
-                self.invoker_overlay.addCommand(command)
         return hand_states
 
 

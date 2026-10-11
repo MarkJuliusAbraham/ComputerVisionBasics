@@ -3,10 +3,10 @@ import time
 
 from custom_overlay.invoker_overlay import InvokerOverlay
 from gestures.detector import GestureState
-from gestures.finger_classifier import FingerPosition
+from gestures.gesture_config import GestureConfig
+from gestures.gesture_matcher import GestureMatcher
 from gestures.gesture_detector import Pinching
-from gestures.palm_detector import PalmPosition
-from input.input_simulator import InputSimulator
+from input.command_executor import CommandExecutor
 from volume_controller import VolumeController
 
 
@@ -30,20 +30,17 @@ class GestureHandler:
     # of vertical movement to count.
     HORIZONTAL_BIAS = 0.4
 
-    # Only these gestures can repeat through movement.
-    REPEATABLE_GESTURES = {"q", "w", "e"}
-
-    # Fingertips tracked for each repeatable gesture (the extended fingers).
-    REPEAT_FINGERS = {
-        "q": ("index", "middle"),
-        "w": ("middle", "ring"),
-        "e": ("index",),
-    }
-
-    def __init__(self, invoker_overlay: InvokerOverlay):
+    def __init__(self, invoker_overlay: InvokerOverlay, config=None):
         self.volume = VolumeController()
-        self.input_simulator = InputSimulator()
         self.invoker_overlay = invoker_overlay
+        self.config = config or GestureConfig.load()
+        self.matcher = GestureMatcher()
+        self.definitions_by_id = {
+            definition.id: definition for definition in self.config.definitions
+        }
+        self.command_executor = CommandExecutor(
+            on_command=self.invoker_overlay.addCommand
+        )
 
         self._pinching = False
         self._previous_y = 0.0
@@ -74,7 +71,7 @@ class GestureHandler:
 
     def handle(self, state: GestureState):
         # Reset always gets checked first.
-        if self.handleReset(state):
+        if self.matcher.matches(self.config.reset_match, state):
             self._reset_active = True
             self._input_locked = False
             self._clear_repeat_state()
@@ -88,7 +85,8 @@ class GestureHandler:
         if self._input_locked:
             if (
                 self.ENABLE_REPEAT
-                and self._active_gesture in self.REPEATABLE_GESTURES
+                and self._active_gesture is not None
+                and self.definitions_by_id[self._active_gesture].repeat_fingers
             ):
                 x, y, z = self._tracked_position(
                     state,
@@ -99,14 +97,13 @@ class GestureHandler:
 
             return None
 
-        result = self._detect_gesture(state)
+        definition = self.matcher.find_match(self.config.definitions, state)
 
-        if result is None:
+        if definition is None:
             return None
 
-        # Only Q/W/E establish repeat tracking.
-        if self.ENABLE_REPEAT and result in self.REPEATABLE_GESTURES:
-            self._active_gesture = result
+        if self.ENABLE_REPEAT and definition.repeat_fingers:
+            self._active_gesture = definition.id
             self._repeat_count = 0
             self._repeat_distance = 0.0
             self._pending_repeats = 0
@@ -114,17 +111,15 @@ class GestureHandler:
             # The initial gesture establishes the starting point
             # for repeat timing and position.
             self._last_repeat_time = time.monotonic()
-            self._store_previous(*self._tracked_position(state, result))
+            self._store_previous(*self._tracked_position(state, definition.id))
         else:
             self._clear_repeat_state()
 
-        # Initial input. The main loop reports it via addCommand,
-        # so report=False here.
-        self._press(result)
+        self._press(definition)
 
         self._latch()
 
-        return result
+        return definition.id
 
     def _clear_repeat_state(self):
         self._active_gesture = None
@@ -141,20 +136,9 @@ class GestureHandler:
         self._previous_fingertip_y = y
         self._previous_z = z
 
-    def _press(self, command, report=False):
-        """
-        Perform a button press.
-
-        The initial gesture is reported by the main loop, so
-        report=False is used for the initial press.
-
-        Repeated presses don't return through handle(), so they
-        pass report=True and are reported directly here.
-        """
-        self.input_simulator.tap(command)
-
-        if report:
-            self.invoker_overlay.addCommand(command)
+    def _press(self, definition):
+        """Execute the command sequence attached to a gesture definition."""
+        self.command_executor.execute(definition.commands)
 
     def _handle_repeat(self, current_x, current_y, current_z):
         if self._active_gesture is None:
@@ -213,8 +197,7 @@ class GestureHandler:
         # Fire exactly one pending repeat. It doesn't return through
         # handle(), so it reports itself directly.
         self._press(
-            self._active_gesture,
-            report=True,
+            self.definitions_by_id[self._active_gesture],
         )
 
         self._repeat_count += 1
@@ -224,10 +207,8 @@ class GestureHandler:
 
     def _tracked_position(self, state, gesture):
         """Average x, y, z of the fingertips relevant to this gesture."""
-        tips = [
-            state.fingers[name].tip
-            for name in self.REPEAT_FINGERS[gesture]
-        ]
+        repeat_fingers = self.definitions_by_id[gesture].repeat_fingers
+        tips = [state.fingers[name].tip for name in repeat_fingers]
         n = len(tips)
 
         return (
@@ -237,99 +218,8 @@ class GestureHandler:
             sum(tip[2] if len(tip) > 2 else 0.0 for tip in tips) / n,
         )
 
-    def _detect_gesture(self, state: GestureState):
-        if self.handleR(state):
-            return "r"
-
-        if self.handleQ(state):
-            return "q"
-
-        if self.handleW(state):
-            return "w"
-
-        if self.handleE(state):
-            return "e"
-
-        if self.handleD(state):
-            return "d"
-
-        if self.handleF(state):
-            return "f"
-
-        return None
-
     def _latch(self):
         self._input_locked = True
-
-    def handleQ(self, state: GestureState):
-        return (
-            state.palm == PalmPosition.NOT_FACING_CAMERA
-            and state.fingers["index"].position == FingerPosition.STRAIGHT
-            and state.fingers["middle"].position == FingerPosition.STRAIGHT
-            and state.fingers["ring"].position == FingerPosition.CLOSED
-            and state.fingers["pinky"].position == FingerPosition.CLOSED
-        )
-
-    def handleW(self, state: GestureState):
-        return (
-            state.palm == PalmPosition.NOT_FACING_CAMERA
-            and state.fingers["index"].position != FingerPosition.STRAIGHT
-            and state.fingers["middle"].position == FingerPosition.STRAIGHT
-            and state.fingers["ring"].position == FingerPosition.STRAIGHT
-            and state.fingers["pinky"].position == FingerPosition.STRAIGHT
-        )
-
-    def handleE(self, state: GestureState):
-        return (
-            state.palm == PalmPosition.NOT_FACING_CAMERA
-            and state.fingers["index"].position == FingerPosition.STRAIGHT
-            and state.fingers["middle"].position != FingerPosition.STRAIGHT
-            and state.fingers["middle"].position != FingerPosition.PARTIAL
-            and state.fingers["ring"].position != FingerPosition.STRAIGHT
-            and state.fingers["pinky"].position != FingerPosition.STRAIGHT
-        )
-
-    def handleR(self, state: GestureState):
-        positions = (
-            state.fingers["index"].position,
-            state.fingers["middle"].position,
-            state.fingers["ring"].position,
-            state.fingers["pinky"].position,
-        )
-
-        return (
-            sum(p == FingerPosition.STRAIGHT for p in positions) >= 4
-            and all(
-                p in (FingerPosition.PARTIAL, FingerPosition.STRAIGHT)
-                for p in positions
-            )
-        )
-
-    def handleD(self, state: GestureState):
-        return (
-            state.palm == PalmPosition.FACING_CAMERA
-            and state.fingers["index"].position == FingerPosition.STRAIGHT
-            and state.fingers["middle"].position == FingerPosition.STRAIGHT
-            and state.fingers["ring"].position != FingerPosition.STRAIGHT
-            and state.fingers["pinky"].position != FingerPosition.STRAIGHT
-        )
-
-    def handleF(self, state: GestureState):
-        return (
-            state.palm == PalmPosition.FACING_CAMERA
-            and state.fingers["index"].position != FingerPosition.STRAIGHT
-            and state.fingers["middle"].position == FingerPosition.STRAIGHT
-            and state.fingers["ring"].position == FingerPosition.STRAIGHT
-            and state.fingers["pinky"].position == FingerPosition.STRAIGHT
-        )
-
-    def handleReset(self, state: GestureState):
-        return (
-            state.fingers["index"].position != FingerPosition.STRAIGHT
-            and state.fingers["middle"].position != FingerPosition.STRAIGHT
-            and state.fingers["ring"].position != FingerPosition.STRAIGHT
-            and state.fingers["pinky"].position != FingerPosition.STRAIGHT
-        )
 
     def _handle_pinching(self, gesture: Pinching):
         delta = self._previous_y - gesture.current_pos[1]
