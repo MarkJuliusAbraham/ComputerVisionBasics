@@ -4,36 +4,81 @@ import tkinter as tk
 from tkinter import ttk
 
 from gestures.gesture_config import GestureMatch
+from gui_tkinter.components.theme import ThemeMetrics
 
 from .criteria_options import PALM_OPTIONS
 from .finger_criteria import FingerCriteriaEditor
 
 
-class HandCriteriaSection(ttk.LabelFrame):
-    """Expose one GestureMatch value instead of individual Tk variables."""
+class HandCriteriaSection(ttk.Frame):
+    """Group hand criteria under a heading, exposing one GestureMatch value."""
 
-    def __init__(self, master, on_change=None):
-        super().__init__(master, text="Hand Criteria", padding=12)
+    def __init__(self, master, on_change=None, appearance=None, segment_count=4):
+        super().__init__(master)
+        self.appearance = appearance or ThemeMetrics(self)
         self._on_change = on_change
         self._loading = False
-        header = ttk.Frame(self)
-        header.pack(fill="x", pady=(0, 12))
-        palm_row = ttk.Frame(header)
-        palm_row.pack(side="left", anchor="nw")
-        ttk.Label(palm_row, text="Palm orientation", width=18, anchor="w").pack(side="left")
+        self.columnconfigure(0, weight=1)
+
+        self.header = ttk.Frame(self)
+        self.header.grid(row=0, column=0, sticky="ew")
+        self.header.columnconfigure(0, weight=1)
+        ttk.Label(self.header, text="Hand criteria",
+                  font=self.appearance.heading_font).grid(row=0, column=0, sticky="w")
+        self.mode_name = tk.StringVar(self, value="Simple choices")
+        self.mode_caption = ttk.Label(
+            self.header, textvariable=self.mode_name, width=23, anchor="e",
+        )
+        self.mode_caption.grid(row=0, column=1, sticky="e")
+        self.mode_button = ttk.Button(
+            self.header, text="Use checklist", width=18, command=self._toggle_mode,
+        )
+        self.mode_button.grid(row=0, column=2, sticky="e")
+
+        self.palm_row = ttk.Frame(self)
+        self.palm_row.grid(row=1, column=0, sticky="ew")
+        self.palm_row.columnconfigure(1, weight=1)
+        ttk.Label(self.palm_row, text="Palm orientation", anchor="w").grid(
+            row=0, column=0, sticky="w"
+        )
         self.palm = tk.StringVar(self, value="Any")
         ttk.Combobox(
-            palm_row, textvariable=self.palm, values=tuple(PALM_OPTIONS),
-            state="readonly", width=22,
-        ).pack(side="left")
-        self.mode_button = ttk.Button(
-            header, text="Use classification checkboxes", width=30,
-            command=self._toggle_mode,
+            self.palm_row, textvariable=self.palm, values=tuple(PALM_OPTIONS),
+            state="readonly", width=1,
+        ).grid(row=0, column=1, sticky="ew")
+
+        self.fingers = FingerCriteriaEditor(
+            self, on_change=self._changed, appearance=self.appearance,
+            segment_count=segment_count,
         )
-        self.mode_button.pack(side="right", anchor="ne")
-        self.fingers = FingerCriteriaEditor(self, on_change=self._changed)
-        self.fingers.pack(fill="x")
+        self.fingers.grid(row=2, column=0, sticky="ew")
+        self.mode_hint = tk.StringVar(
+            self, value="Any position leaves that finger unrestricted.",
+        )
+        self.hint_label = ttk.Label(
+            self, textvariable=self.mode_hint, width=1, anchor="w",
+        )
+        self.hint_label.grid(row=3, column=0, sticky="ew")
+        self.availability_hint = ttk.Label(
+            self, textvariable=self.fingers.availability_message, width=1, anchor="w",
+        )
+        self.availability_hint.grid(row=4, column=0, sticky="ew")
         self.palm.trace_add("write", self._changed)
+        self._refresh_layout()
+        self.bind("<<ThemeChanged>>", lambda _event: self.after_idle(self._refresh_layout))
+
+    def _refresh_layout(self):
+        self.appearance.refresh()
+        gap = self.appearance.pixels(12)
+        self.header.grid_configure(pady=(0, gap))
+        self.mode_caption.grid_configure(padx=(gap, gap))
+        self.palm_row.grid_configure(pady=(0, gap))
+        self.palm_row.columnconfigure(0, minsize=self.fingers.label_width)
+        self.hint_label.grid_configure(pady=(self.appearance.pixels(8), 0))
+        self.availability_hint.grid_configure(pady=(self.appearance.pixels(6), 0))
+
+    def set_segment_count(self, segment_count):
+        self.fingers.set_segment_count(segment_count)
 
     def values(self):
         return GestureMatch(
@@ -55,7 +100,10 @@ class HandCriteriaSection(ttk.LabelFrame):
 
     def _toggle_mode(self):
         self.fingers.toggle_mode()
-        self.mode_button.configure(text=(
-            "Use classification checkboxes" if self.fingers.mode == "straightness"
-            else "Use straightness controls"
-        ))
+        checklist = self.fingers.mode == "classifications"
+        self.mode_name.set("Classification checklist" if checklist else "Simple choices")
+        self.mode_button.configure(text="Use simple choices" if checklist else "Use checklist")
+        self.mode_hint.set(
+            "A row with no checks accepts any position." if checklist else
+            "Any position leaves that finger unrestricted."
+        )

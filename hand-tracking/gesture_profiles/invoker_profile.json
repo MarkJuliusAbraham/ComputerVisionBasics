@@ -41,7 +41,6 @@
       "match": {
         "fingers": {
           "index": [
-            "partial",
             "straight"
           ],
           "middle": [
@@ -51,7 +50,7 @@
             "straight"
           ],
           "pinky": [
-            "closed"
+            "straight"
           ]
         },
         "palm": "not_facing_camera"
@@ -79,10 +78,16 @@
             "straight"
           ],
           "ring": [
-            "closed"
+            "closed",
+            "curled",
+            "nearly_closed",
+            "very_curled"
           ],
           "pinky": [
-            "closed"
+            "closed",
+            "curled",
+            "nearly_closed",
+            "very_curled"
           ]
         },
         "palm": "not_facing_camera"
@@ -109,16 +114,19 @@
         "fingers": {
           "index": [
             "closed",
-            "curled",
-            "partial"
+            "nearly_closed",
+            "very_curled"
           ],
           "middle": [
+            "partial",
             "straight"
           ],
           "ring": [
+            "partial",
             "straight"
           ],
           "pinky": [
+            "partial",
             "straight"
           ]
         },
@@ -186,8 +194,11 @@
       "name": "Cast 1",
       "match": {
         "fingers": {
-          "thumb": [
-            "straight"
+          "index": [
+            "curled",
+            "partial",
+            "straight",
+            "very_curled"
           ],
           "middle": [
             "curled",

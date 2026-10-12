@@ -36,6 +36,34 @@ _SV_FONTS = ("SunValleyBodyFont", "SunValleyCaptionFont", "SunValleyBodyStrongFo
 _system_scale = None
 
 
+class ThemeMetrics:
+    """Share the active theme's typography and scaled spacing within a form."""
+
+    def __init__(self, widget):
+        self.widget = widget
+        self.font = tkfont.Font(root=widget)
+        self.heading_font = self.font.copy()
+        self.refresh()
+
+    def refresh(self):
+        self.scale = float(self.widget.tk.call("tk", "scaling")) * 72 / 96
+        font_name = ttk.Style(self.widget).lookup("TLabel", "font") or "TkDefaultFont"
+        actual = self.widget.tk.splitlist(self.widget.tk.call("font", "actual", font_name))
+        attributes = {
+            str(key).lstrip("-"): value for key, value in zip(actual[::2], actual[1::2])
+        }
+        for key in ("size", "underline", "overstrike"):
+            attributes[key] = int(attributes[key])
+        if self.font.actual() != attributes:
+            self.font.configure(**attributes)
+        heading_attributes = {**attributes, "weight": "bold"}
+        if self.heading_font.actual() != heading_attributes:
+            self.heading_font.configure(**heading_attributes)
+
+    def pixels(self, value):
+        return round(value * self.scale)
+
+
 def system_scale(root):
     """Windows' display scale (1.0 = 100%). Read once, before we change Tk's own scaling."""
     global _system_scale

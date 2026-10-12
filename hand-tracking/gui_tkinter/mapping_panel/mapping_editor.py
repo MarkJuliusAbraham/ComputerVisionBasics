@@ -12,7 +12,7 @@ from .mapping_session import MappingSession
 class MappingEditor(ttk.Frame):
     """Connect the form and its editing session to application callbacks."""
 
-    def __init__(self, master, on_saved=None, config_path=None):
+    def __init__(self, master, on_saved=None, config_path=None, segment_count=4):
         super().__init__(master)
         self.on_saved = on_saved
         self.session = MappingSession(config_path=config_path)
@@ -24,6 +24,8 @@ class MappingEditor(ttk.Frame):
             on_manage=self._manage_gestures,
             on_choose_profile=self._choose_profile,
             on_save=self.save,
+            on_discard=self.discard,
+            segment_count=segment_count,
         )
         self.form.pack(fill="both", expand=True)
         self._refresh_form()
@@ -31,6 +33,7 @@ class MappingEditor(ttk.Frame):
     def _capture_draft(self):
         if self._shown_id is not None:
             self.session.update_draft(self._shown_id, self.form.values())
+        self.session.update_reset(self.form.reset_values())
 
     def _refresh_form(self, selected_id=None):
         if selected_id in self.session.drafts:
@@ -41,6 +44,12 @@ class MappingEditor(ttk.Frame):
         self.form.show_gestures(self.session.definitions, self._shown_id)
         if self._shown_id is not None:
             self.form.load_draft(self.session.drafts[self._shown_id])
+        self.form.load_reset(self.session.reset_draft)
+        self.form.set_dirty(self.session.is_dirty)
+
+    def set_segment_count(self, segment_count):
+        self._capture_draft()
+        self.form.set_segment_count(segment_count)
         self.form.set_dirty(self.session.is_dirty)
 
     def _editor_changed(self):
@@ -79,7 +88,9 @@ class MappingEditor(ttk.Frame):
         GestureManagerDialog(
             self.winfo_toplevel(),
             gestures=self.session.definitions,
-            on_create=self.session.create_gesture,
+            on_create=lambda definitions: self.session.create_gesture(
+                definitions, self.form.segment_count, self.session.config.reset_match,
+            ),
             on_save=self._save_managed_gestures,
         ).show()
 

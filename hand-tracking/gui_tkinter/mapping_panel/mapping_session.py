@@ -6,7 +6,7 @@ from itertools import product
 from pathlib import Path
 from uuid import uuid4
 
-from gestures.finger_classifier import FINGER_CATEGORIES_BY_COUNT, FINGERS
+from gestures.finger_classifier import FINGERS, finger_categories
 from gestures.gesture_config import (
     CommandSequence,
     CommandStep,
@@ -45,7 +45,7 @@ class MappingSession:
 
     @property
     def is_dirty(self):
-        return self.drafts != self._baseline
+        return self.drafts != self._baseline or self.reset_draft != self.config.reset_match
 
     def _load(self, config):
         self.config = config
@@ -54,6 +54,7 @@ class MappingSession:
             for definition in config.definitions
         }
         self._baseline = deepcopy(self.drafts)
+        self.reset_draft = config.reset_match
 
     def update_draft(self, gesture_id, draft):
         if gesture_id not in self.drafts:
@@ -62,13 +63,19 @@ class MappingSession:
 
     def discard(self):
         self.drafts = deepcopy(self._baseline)
+        self.reset_draft = self.config.reset_match
+
+    def update_reset(self, match):
+        self.reset_draft = match
 
     def build_config(self):
         definitions = tuple(
             self.drafts[definition.id].to_definition(definition)
             for definition in self.definitions
         )
-        updated = replace(self.config, definitions=definitions)
+        updated = replace(
+            self.config, definitions=definitions, reset_match=self.reset_draft,
+        )
         # Use the profile parser for criteria, overlap, and command validation.
         return GestureConfig.from_dict(updated.to_dict())
 
@@ -123,11 +130,13 @@ class MappingSession:
         return updated
 
     @staticmethod
-    def create_gesture(current_definitions):
+    def create_gesture(current_definitions, segment_count=4, reset_match=None):
         """Choose an unused pattern for a newly managed gesture."""
         fingers = tuple(FINGERS)
-        positions = tuple(category.value for category in FINGER_CATEGORIES_BY_COUNT[6])
+        positions = tuple(category.value for category in finger_categories(segment_count))
         existing = [definition.match for definition in current_definitions]
+        if reset_match is not None:
+            existing.append(reset_match)
         for palm in (None, "facing_camera", "not_facing_camera"):
             for pattern in product(positions, repeat=len(fingers)):
                 match = GestureMatch(
@@ -146,7 +155,7 @@ class MappingSession:
                 continue
             break
         else:
-            raise ValueError("No non-overlapping gesture pattern is available")
+            raise ValueError("No gesture pattern is available outside the command and reset rules")
 
         existing_ids = {definition.id for definition in current_definitions}
         gesture_id = f"gesture_{uuid4().hex[:8]}"

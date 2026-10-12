@@ -4,8 +4,7 @@ from dataclasses import dataclass
 import tkinter as tk
 from tkinter import filedialog, ttk
 
-from gui_tkinter.components.finger_threshold_control import FingerThresholdControl
-from gui_tkinter.settings_panel.deviation_preview import DeviationPreview
+from gui_tkinter.settings_panel.deviation_settings import DeviationSettings
 from settings.settings_manager import Settings, THEMES, UI_SCALES
 
 
@@ -89,108 +88,52 @@ class _FieldSection(ttk.LabelFrame):
 
 
 class TrackingSection(_FieldSection):
-    """Tracking switches, thresholds, and the live deviation preview."""
-
-    FINGER_THRESHOLD_KEYS = (
-        "finger_straight_threshold",
-        "finger_curled_threshold",
-        "finger_closed_threshold",
-    )
+    """Tracking switches and the editable deviation settings."""
 
     def __init__(self, master, theme_name, max_deviation, on_change=None):
         fields = (
             FieldSpec("track_hands", "Track hands", "check"),
             FieldSpec("profile", "Print FPS to console", "check"),
-            FieldSpec(
-                "pinch_distance_threshold", "Pinch distance threshold", "number",
-                minimum=0.01, maximum=0.20, increment=0.01,
-            ),
-            FieldSpec(
-                "pinch_release_factor", "Pinch release factor", "number",
-                minimum=1.0, maximum=2.0, increment=0.05,
-            ),
         )
         super().__init__(master, "Tracking options", fields, on_change)
-        self._segment_count = 4
-        self._max_deviation = max_deviation
-        self.error = tk.StringVar()
-
-        ttk.Label(self, text="Finger deviation ranges").pack(
-            anchor="w", pady=(12, 2)
+        self.error = tk.StringVar(self)
+        self.deviation = DeviationSettings(
+            self, theme_name=theme_name, max_deviation=max_deviation,
+            on_change=self._notify_change,
         )
-        self.threshold_variables = {
-            key: tk.DoubleVar() for key in self.FINGER_THRESHOLD_KEYS
-        }
-        self.variables.update(self.threshold_variables)
-        self.finger_threshold_control = FingerThresholdControl(
-            self,
-            self.threshold_variables["finger_straight_threshold"],
-            self.threshold_variables["finger_curled_threshold"],
-            self.threshold_variables["finger_closed_threshold"],
-            on_change=self._thresholds_changed,
-        )
-        self.finger_threshold_control.pack(fill="x", pady=(0, 6))
-
-        self.preview = DeviationPreview(
-            self, theme_name=theme_name, max_deviation=max_deviation
-        )
-        self.preview.pack(fill="x")
-
+        self.deviation.pack(fill="x")
+        self.variables.update(self.deviation.variables)
         ttk.Label(self, textvariable=self.error, wraplength=300).pack(
             anchor="w", pady=(8, 0)
         )
 
-    def _thresholds_changed(self):
-        self._update_preview_thresholds()
-        self._notify_change()
-
-    def _update_preview_thresholds(self):
-        thresholds = self.thresholds
-        if thresholds:
-            self._max_deviation = thresholds[-1]
-        self.preview.set_thresholds(
-            thresholds,
-            self._segment_count,
-            self._max_deviation,
-        )
+    @property
+    def finger_threshold_control(self):
+        return self.deviation.control
 
     @property
     def thresholds(self):
-        return [
-            self.threshold_variables[key].get()
-            for key in self.FINGER_THRESHOLD_KEYS
-        ]
+        return self.deviation.control.thresholds
 
     @property
     def tracking_preview_active(self):
-        return self.preview.visible
+        return self.deviation.preview.visible
 
     def values(self):
         values = super().values()
-        values["finger_classification_thresholds"] = self.thresholds
-        values["finger_segment_count"] = self._segment_count
+        values.update(self.deviation.values())
         return values
 
     def load(self, data):
-        self.load_values({
-            "track_hands": data.track_hands,
-            "profile": data.profile,
-            "pinch_distance_threshold": None,
-            "pinch_release_factor": None,
-        })
-        for key, value in zip(self.FINGER_THRESHOLD_KEYS, data.finger_classification_thresholds):
-            self.threshold_variables[key].set(value)
-        self._segment_count = data.finger_segment_count
-        self._max_deviation = data.finger_classification_thresholds[-1]
-        self._update_preview_thresholds()
+        self.load_values({"track_hands": data.track_hands, "profile": data.profile})
+        self.deviation.load(data)
         self.error.set("")
 
     def set_theme(self, theme_name):
-        self.finger_threshold_control.set_theme(theme_name)
-        self.preview.set_theme(theme_name)
+        self.deviation.set_theme(theme_name)
 
     def set_preview_data(self, fingers, status):
-        self.preview.set_data(fingers, status)
+        self.deviation.preview.set_data(fingers, status)
 
     def set_error(self, message):
         self.error.set(message)

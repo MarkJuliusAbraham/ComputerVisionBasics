@@ -84,7 +84,7 @@ class SettingsPanel:
         values = self.get_values()
         if not values.has_valid_finger_thresholds():
             self.tracking_error.set(
-                "Thresholds must increase: straight < curled < closed."
+                "Thresholds must be strictly increasing between 0° and 120°."
             )
             self.show_topic("Tracking")
             return

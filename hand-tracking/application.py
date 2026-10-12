@@ -48,11 +48,15 @@ class Application:
         self._tracking_tab_active = True
         self._camera_ui_state = None
         self._gesture_display_updated = 0.0
+        self._gesture_display_snapshot = None
         self._latest_hand_states = []
         panels = PanelSet(
             main=MainPanel(),
             settings=SettingsPanel(),
-            mapping=MappingPanel(on_saved=self.apply_gesture_config),
+            mapping=MappingPanel(
+                on_saved=self.apply_gesture_config,
+                segment_count=settings.data.finger_segment_count,
+            ),
         )
         self.panels = panels
         callbacks = ControlCallbacks(
@@ -80,6 +84,8 @@ class Application:
         self.profile = self.settings.data.profile
         self.frame_profiler.enabled = bool(self.profile)
         self.theme = self.settings.data.theme
+        if hasattr(self, "panels") and self.panels.mapping is not None:
+            self.panels.mapping.set_segment_count(self.settings.data.finger_segment_count)
 
     def load_settings_file(self, path):
         """Called when the user browses to a different file."""
@@ -180,6 +186,8 @@ class Application:
         if frame is None:
             # A failed device should leave the controls available for choosing
             # another camera rather than terminating the whole application.
+            self._latest_hand_states = []
+            self._refresh_gesture_display()
             with self.frame_profiler.measure("opencv.wait_key"):
                 cv2.waitKey(1)
             self.gui.after(10, self._process_frame)
@@ -205,20 +213,7 @@ class Application:
         with self.frame_profiler.measure("gesture_path.draw"):
             self.gesture_path_overlay.draw(frame, self.gesture_handler.drawing_path)
 
-        now = time.monotonic()
-        if now - self._gesture_display_updated >= 0.1:
-            with self.frame_profiler.measure("ui.gesture_display"):
-                self.panels.main.update_gesture_display(
-                    self._latest_hand_states,
-                    enabled=self.track_hands,
-                    paused=self.tracking_paused,
-                )
-                main_panel = self.panels.main
-                self.panels.settings.set_preview_data(
-                    main_panel.preview_fingers,
-                    main_panel.preview_status,
-                )
-            self._gesture_display_updated = now
+        self._refresh_gesture_display()
 
         # Once per frame, even when no hands are visible
         with self.frame_profiler.measure("overlay.compose"):
@@ -230,6 +225,36 @@ class Application:
 
         self.gui.after(1, self._process_frame)
 
+    def _refresh_gesture_display(self):
+        """Report hand/gesture changes immediately; throttle ongoing finger data."""
+        snapshot = (
+            self.track_hands, self.tracking_paused,
+            tuple(
+                (record["handedness"], record["state"].palm, record["gesture"])
+                for record in sorted(
+                    self._latest_hand_states, key=lambda record: record["handedness"]
+                )
+            ),
+        )
+        now = time.monotonic()
+        if (
+            snapshot == self._gesture_display_snapshot
+            and now - self._gesture_display_updated < 0.1
+        ):
+            return
+        with self.frame_profiler.measure("ui.gesture_display"):
+            main_panel = self.panels.main
+            main_panel.update_gesture_display(
+                self._latest_hand_states,
+                enabled=self.track_hands,
+                paused=self.tracking_paused,
+            )
+            self.panels.settings.set_preview_data(
+                main_panel.preview_fingers, main_panel.preview_status,
+            )
+        self._gesture_display_snapshot = snapshot
+        self._gesture_display_updated = now
+
     def process_hands(self, frame, tracking, invoke_commands=True):
         hand_states = []
         for hand, handedness in zip(tracking.hand_landmarks, tracking.handedness):
@@ -238,15 +263,16 @@ class Application:
             state = self.detector.update(hand, hand_name)
             self.debug_overlay.update(frame, state)
 
-            command = self.gesture_handler.handle(
+            gesture = self.gesture_handler.handle(
                 state,
                 hand_name,
                 frame_size=(frame.shape[1], frame.shape[0]),
-            ) if invoke_commands else None
+                invoke_commands=invoke_commands,
+            )
             hand_states.append({
                 "handedness": hand_name,
                 "state": state,
-                "command": command,
+                "gesture": gesture,
             })
         return hand_states
 

@@ -6,7 +6,9 @@ from tkinter import ttk
 from gui_tkinter.components.scrollable_frame import ScrollableFrame
 
 from .gesture_draft import GestureDraft
-from .sections import CommandSequenceSection, GestureSection, ProfileSection
+from .sections import (
+    CommandSequenceSection, GestureSection, ProfileSection, ResetGestureSection,
+)
 
 
 class MappingForm(ttk.Frame):
@@ -14,7 +16,7 @@ class MappingForm(ttk.Frame):
 
     def __init__(
         self, master, *, on_change=None, on_select=None, on_manage=None,
-        on_choose_profile=None, on_save=None,
+        on_choose_profile=None, on_save=None, on_discard=None, segment_count=4,
     ):
         super().__init__(master, padding=(24, 20))
         header = ttk.Frame(self)
@@ -39,6 +41,10 @@ class MappingForm(ttk.Frame):
             footer, text="Save mappings", command=on_save, style="Accent.TButton",
         )
         self.save_button.pack(side="right")
+        self.discard_button = ttk.Button(
+            footer, text="Discard changes", command=on_discard,
+        )
+        self.discard_button.pack(side="right", padx=(0, 10))
 
         self.scroll = ScrollableFrame(self)
         self.scroll.pack(fill="both", expand=True)
@@ -49,10 +55,30 @@ class MappingForm(ttk.Frame):
         ttk.Separator(group, orient="horizontal").pack(fill="x", pady=(12, 14))
         self.gesture = GestureSection(
             group, on_select=on_select, on_manage=on_manage, on_change=on_change,
+            segment_count=segment_count,
         )
         self.gesture.pack(fill="x", pady=(0, 12))
         self.sequence = CommandSequenceSection(group, on_change=on_change)
         self.sequence.pack(fill="x")
+        ttk.Separator(group, orient="horizontal").pack(fill="x", pady=(14, 14))
+        self.reset = ResetGestureSection(
+            group, on_change=on_change, segment_count=segment_count,
+        )
+        self.reset.pack(fill="x")
+
+    @property
+    def segment_count(self):
+        return self.gesture.criteria.fingers.segment_count
+
+    def set_segment_count(self, segment_count):
+        self.gesture.criteria.set_segment_count(segment_count)
+        self.reset.set_segment_count(segment_count)
+
+    def reset_values(self):
+        return self.reset.values()
+
+    def load_reset(self, match):
+        self.reset.load(match)
 
     def values(self):
         return GestureDraft(
@@ -73,6 +99,7 @@ class MappingForm(ttk.Frame):
 
     def set_dirty(self, dirty):
         self.save_button.state(["!disabled"] if dirty else ["disabled"])
+        self.discard_button.state(["!disabled"] if dirty else ["disabled"])
 
     def set_status(self, message):
         self.status.set(message)

@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from .core.state import ControlWindowContext, WindowView
+from .core.input_interactions import InputInteractionController
 from .core.window_lifecycle import WindowLifecycleController
 
 BASE_SIZE = (860, 720)  # window size in pixels at 100%
@@ -84,6 +85,8 @@ class ControlWindow:
         """Install notebook and window lifecycle callbacks after mounting panels."""
         self.lifecycle = WindowLifecycleController(self.view, self.context)
         self.lifecycle.bind()
+        self.interactions = InputInteractionController(self.view.root)
+        self.interactions.bind()
 
     def _report_callback_exception(self, exception, value, traceback):
         """Treat IDE shutdown interrupts as a request to close the application."""

@@ -88,11 +88,17 @@ class GestureHandler:
             )
         return self._completed_path
 
-    def handle(self, state: GestureState, handedness=None, frame_size=None):
-        if frame_size and frame_size[0]:
+    def handle(
+        self, state: GestureState, handedness=None, frame_size=None,
+        invoke_commands=True,
+    ):
+        """Return the current gesture definition, optionally invoking its commands."""
+        if invoke_commands and frame_size and frame_size[0]:
             self._frame_aspect = frame_size[1] / frame_size[0]
         # Reset always gets checked first.
         if self.matcher.matches(self.config.reset_match, state):
+            if not invoke_commands:
+                return None
             self.command_executor.clear()
             self._reset_active = True
             self._input_locked = False
@@ -100,6 +106,10 @@ class GestureHandler:
             self._clear_path()
 
             return None
+
+        definition = self.matcher.find_match(self.config.definitions, state)
+        if not invoke_commands:
+            return definition
 
         self._reset_active = False
 
@@ -120,9 +130,7 @@ class GestureHandler:
                     path_segment[0], path_segment[1], self._frame_aspect
                 )
 
-            return None
-
-        definition = self.matcher.find_match(self.config.definitions, state)
+            return definition
 
         if definition is None:
             return None
@@ -151,7 +159,7 @@ class GestureHandler:
 
         self._latch()
 
-        return definition.name
+        return definition
 
     def _clear_repeat_state(self):
         self._active_gesture = None

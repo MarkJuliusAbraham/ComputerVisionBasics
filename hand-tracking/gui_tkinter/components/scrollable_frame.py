@@ -25,7 +25,8 @@ class ScrollableFrame(ttk.Frame):
         )
         self.content.bind("<Configure>", self._update_scroll_region)
         self.canvas.bind("<Configure>", self._resize_content)
-        self._toplevel.bind_all("<MouseWheel>", self._on_mousewheel, add="+")
+        for event in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+            self._toplevel.bind_all(event, self._on_mousewheel, add="+")
         self.bind("<<ThemeChanged>>", lambda _event: self.set_surface())
         self.set_surface()
 
@@ -43,24 +44,39 @@ class ScrollableFrame(ttk.Frame):
         if background:
             self.canvas.configure(background=background)
 
-    def _contains_widget(self, widget):
-        current = widget
-        while current is not None:
-            if current == self.content:
-                return True
-            parent_path = current.winfo_parent()
-            if not parent_path:
-                return False
-            try:
-                current = self._toplevel.nametowidget(parent_path)
-            except KeyError:
-                return False
-        return False
+    @classmethod
+    def for_event(cls, event):
+        """Find the nearest scroll container under the pointer, regardless of focus."""
+        widget = event.widget
+        if not isinstance(widget, tk.Misc):
+            # Tk's native dropdown listbox is not a Python-managed widget.
+            return None
+        try:
+            widget = widget.winfo_toplevel().winfo_containing(
+                event.x_root, event.y_root,
+            ) or widget
+        except (KeyError, tk.TclError):
+            return None
+        while widget is not None:
+            if isinstance(widget, cls):
+                return widget
+            widget = widget.master
+        return None
 
     def _on_mousewheel(self, event):
-        if not self._contains_widget(event.widget) or not event.delta:
+        if self.for_event(event) is self:
+            return self.scroll_mousewheel(event)
+
+    def scroll_mousewheel(self, event):
+        """Scroll the page without invoking wheel bindings on its input fields."""
+        button = getattr(event, "num", None)
+        delta = getattr(event, "delta", 0)
+        if button in (4, 5):
+            amount = -1 if button == 4 else 1
+        elif delta:
+            amount = -int(delta / 120) or (-1 if delta > 0 else 1)
+        else:
             return
-        amount = -int(event.delta / 120) or (-1 if event.delta > 0 else 1)
         self.canvas.yview_scroll(amount, "units")
         return "break"
 
