@@ -5,11 +5,11 @@
   "ui_scale": "150%",
   "finger_segment_count": 6,
   "finger_classification_thresholds": [
-    15.0,
-    42.0,
-    64.85,
-    81.3,
-    99.6
+    15.4,
+    36.2,
+    60.9,
+    76.8,
+    88.8
   ],
   "finger_deviation_calculation": "default"
 }

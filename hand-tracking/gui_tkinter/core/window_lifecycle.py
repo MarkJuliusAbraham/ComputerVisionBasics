@@ -1,53 +1,77 @@
-"""Window lifecycle coordination for the Tkinter control surface."""
+"""Visibility, tab transitions, and unsaved changes for any panel window."""
 
-from gui_tkinter.components.unapplied_changes_dialog import UnappliedChangesDialog
+from .unsaved_changes_guard import PendingChanges, UnsavedChangesGuard
 
 
 class WindowLifecycleController:
-    """Own notebook transitions and close confirmation for the control window."""
-
-    def __init__(self, view, context):
+    def __init__(self, view, context, *, changes_guard=None):
         self.view = view
         self.context = context
+        self._notified_active = None
+        self.changes_guard = (
+            changes_guard if changes_guard is not None else UnsavedChangesGuard(view.root)
+        )
+        settings = context.panels.settings
+        self.editable_pages = {
+            str(view.settings_tab): PendingChanges(
+                "Settings", settings.is_dirty, settings.apply, settings.discard,
+            ),
+        }
+        mapping = context.panels.mapping
+        if mapping is not None:
+            self.editable_pages[str(view.mapping_tab)] = PendingChanges(
+                "Mapping", mapping.is_dirty, mapping.save, mapping.discard,
+            )
 
     def bind(self):
         self.view.current_tab = self.view.notebook.select()
+        self.view.notebook.before_select = self._before_tab_change
         self.view.notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
         self.view.root.protocol("WM_DELETE_WINDOW", self.request_close)
+        self.view.root.bind("<Map>", self._visibility_changed, add="+")
+        self.view.root.bind("<Unmap>", self._visibility_changed, add="+")
+        self.view.root.after_idle(self.notify_activity)
 
-    def _on_tab_changed(self, event):
-        old_tab = self.view.current_tab
-        new_tab = self.view.notebook.select()
-        self.view.current_tab = new_tab
+    def _before_tab_change(self, current_tab, _target_tab):
+        changes = self.editable_pages.get(current_tab)
+        return changes is None or self.changes_guard.confirm(changes)
 
-        leaving_settings = (
-            old_tab == str(self.view.settings_tab) and new_tab != old_tab
+    def _on_tab_changed(self, _event):
+        self.view.current_tab = self.view.notebook.select()
+        self.notify_activity()
+        self.view.root.after_idle(self._clear_page_focus)
+
+    def _clear_page_focus(self):
+        """Clear an auto-focused page input without activating another window."""
+        window = self.view.root
+        focused = window.focus_get()
+        if (
+            focused is not None
+            and focused.winfo_toplevel() is window
+            and focused not in (window, self.view.notebook)
+        ):
+            window.focus_set()
+
+    def _visibility_changed(self, event):
+        if event.widget is self.view.root:
+            self.view.root.after_idle(self.notify_activity)
+
+    def page_visible(self, page):
+        return bool(self.view.root.winfo_viewable()) and self.view.notebook.select() == str(page)
+
+    def notify_activity(self):
+        callback = self.context.callbacks.on_main_active
+        active = self.page_visible(self.view.main_tab)
+        if callback and active != self._notified_active:
+            self._notified_active = active
+            callback(active)
+
+    def confirm_close(self):
+        return all(
+            self.changes_guard.confirm(changes, return_label="Cancel")
+            for changes in self.editable_pages.values()
         )
-        if leaving_settings and self.context.panels.settings.is_dirty():
-            if not self._confirm_leave():
-                self.view.current_tab = old_tab
-                self.view.notebook.select(old_tab)
-
-        callback = self.context.callbacks.on_tracking_tab_active
-        if callback:
-            callback(self.view.notebook.select() == str(self.view.main_tab))
 
     def request_close(self):
-        current_tab = self.view.notebook.select()
-        if (
-            current_tab == str(self.view.settings_tab)
-            and self.context.panels.settings.is_dirty()
-            and not self._confirm_leave()
-        ):
-            return
-        self.context.callbacks.on_close()
-
-    def _confirm_leave(self):
-        choice = UnappliedChangesDialog(self.view.root).show()
-        if choice == "cancel":
-            return False
-        if choice == "apply":
-            self.context.panels.settings.apply()
-        else:
-            self.context.panels.settings.discard()
-        return True
+        if self.confirm_close():
+            self.context.callbacks.on_close()

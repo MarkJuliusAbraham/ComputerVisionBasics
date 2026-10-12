@@ -4,7 +4,8 @@ import time
 from custom_overlay.invoker_overlay import InvokerOverlay
 from gestures.detector import GestureState
 from gestures.gesture_config import GestureConfig
-from gestures.gesture_matcher import GestureMatcher
+from gestures.gesture_matcher import AmbiguousGestureError, GestureMatcher
+from gestures.gesture_validation import GestureCriteriaValidator
 from gestures.profile_manager import GestureProfileManager
 from input.command_executor import CommandExecutor
 
@@ -13,17 +14,17 @@ class GestureHandler:
     ENABLE_REPEAT = True
     MAX_PATH_POINTS = 2048
 
-    def __init__(self, invoker_overlay: InvokerOverlay, config=None):
+    def __init__(self, invoker_overlay: InvokerOverlay, config=None, *, criteria_validator=None):
         self.invoker_overlay = invoker_overlay
         if config is None:
             config = GestureConfig.load(
                 GestureProfileManager().active_profile
             )
-        self.config = config
+        self.criteria_validator = (
+            criteria_validator if criteria_validator is not None else GestureCriteriaValidator()
+        )
+        self._set_config(config)
         self.matcher = GestureMatcher()
-        self.definitions_by_id = {
-            definition.id: definition for definition in self.config.definitions
-        }
         self.command_executor = CommandExecutor(
             on_command=self.invoker_overlay.addCommand
         )
@@ -59,14 +60,22 @@ class GestureHandler:
     def configure(self, config):
         """Replace the gesture map and clear any active latch/repeat state."""
         self.command_executor.clear()
-        self.config = config
-        self.definitions_by_id = {
-            definition.id: definition for definition in config.definitions
-        }
+        self._set_config(config)
         self._input_locked = False
         self._reset_active = False
         self._clear_repeat_state()
         self._clear_path()
+
+    def _set_config(self, config):
+        self.config = config
+        self.definitions_by_id = {definition.id: definition for definition in config.definitions}
+        report = self.criteria_validator.validate(
+            {definition.id: definition.match for definition in config.definitions}, config.reset_match,
+        )
+        invalid_ids = report.invalid_ids
+        self._valid_definitions = tuple(
+            definition for definition in config.definitions if definition.id not in invalid_ids
+        )
 
     def update(self, allow_repeats=True):
         """Advance delayed command actions from the application event loop."""
@@ -77,6 +86,14 @@ class GestureHandler:
     def close(self):
         self.command_executor.clear()
         self._clear_path()
+
+    def suspend(self):
+        """Release input and cancel repeats while preserving the completed drawing."""
+        self.command_executor.clear()
+        self._finish_path()
+        self._clear_repeat_state()
+        self._input_locked = False
+        self._reset_active = False
 
     @property
     def drawing_path(self):
@@ -107,7 +124,12 @@ class GestureHandler:
 
             return None
 
-        definition = self.matcher.find_match(self.config.definitions, state)
+        try:
+            definition = self.matcher.find_match(self._valid_definitions, state)
+        except AmbiguousGestureError:
+            # Different criteria can still match the same particular hand.
+            # Await an unambiguous hand state without stopping the UI callback.
+            definition = None
         if not invoke_commands:
             return definition
 

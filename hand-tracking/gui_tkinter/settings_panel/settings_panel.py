@@ -1,135 +1,110 @@
-"""Coordinator for the Tkinter settings form."""
+"""Settings persistence shared by the hub and individual tracking modules."""
 
+from copy import deepcopy
 from tkinter import ttk
 
-from gui_tkinter.components.theme import apply_theme, resolve_scale
-from gui_tkinter.settings_panel.settings_form import SettingsForm
-from settings.settings_manager import SettingsData
+from settings.settings_manager import SHARED_SETTINGS_SCOPE, SettingsData
+from gui_tkinter.components.buttons import DiscardChangesButton
+
+from .settings_form import SettingsForm
 
 
 class SettingsPanel:
-    """Coordinate settings persistence, validation, and section callbacks."""
+    """Commit only the supplied scope and delegate controls to a supplied form."""
 
-    def __init__(self, on_settings_path=None, on_apply=None):
+    def __init__(
+        self, on_settings_path=None, on_apply=None, *,
+        scope=SHARED_SETTINGS_SCOPE, form_factory=SettingsForm,
+    ):
         self.on_settings_path = on_settings_path
         self.on_apply = on_apply
+        self.scope = scope
+        self.form_factory = form_factory
         self._baseline = SettingsData()
-        self._segment_count = 4
-        self._max_deviation = 75.0
+        self.form = None
 
     def build(self, parent, settings):
-        self.settings_tab = parent
         self.root = parent.winfo_toplevel()
-
-        self.settings_content = ttk.Frame(parent)
-        self.settings_content.pack(fill="both", expand=True)
-
-        button_row = ttk.Frame(self.settings_content)
-        button_row.pack(side="bottom", fill="x", padx=12, pady=(12, 12))
+        content = ttk.Frame(parent)
+        content.pack(fill="both", expand=True)
+        footer = ttk.Frame(content)
+        footer.pack(side="bottom", fill="x", padx=12, pady=12)
         self.apply_button = ttk.Button(
-            button_row,
-            text="Apply",
-            command=self.apply,
-            style="Accent.TButton",
+            footer, text="Apply", command=self.apply, style="Accent.TButton",
         )
         self.apply_button.pack(side="right")
-
-        self.form = SettingsForm(
-            self.settings_content,
-            theme_name=settings.data.theme,
-            max_deviation=settings.data.finger_classification_thresholds[-1],
-            on_change=self._refresh_apply_state,
+        self.discard_button = DiscardChangesButton(footer, command=self.discard)
+        self.discard_button.pack(side="right", padx=(0, 8))
+        self.form = self.form_factory(
+            content, settings=settings, on_change=self._refresh_apply_state,
             on_settings_path=self.on_settings_path,
         )
+        ttk.Label(footer, textvariable=self.form.status_var, wraplength=360).pack(
+            side="left", fill="x", expand=True,
+        )
+        ttk.Label(content, textvariable=self.form.validation_error, wraplength=600).pack(
+            side="bottom", fill="x", padx=12,
+        )
         self.form.pack(fill="both", expand=True, padx=12, pady=(12, 0))
-
-        # Keep the panel's small public surface convenient for callers that
-        # need to inspect a specific setting widget.
-        self.vars = self.form.variables
-        self.topic_pages = self.form.sections
-        self.path_var = self.form.path_var
-        self.status_var = self.form.status_var
-        self.tracking_error = self.form.tracking_error
-        self.finger_threshold_control = self.form.tracking.finger_threshold_control
-
         self.show_settings(settings)
-        self.status_var.set("Settings file loaded")
-        self.root.after_idle(self.root.focus_set)
-
-    # ---- form state -------------------------------------------------
+        return self.form
 
     def get_values(self):
-        return SettingsData.from_dict(self.form.values())
+        return self.scope.merge(self._baseline, self.form.values())
 
     def is_dirty(self):
-        return self.get_values() != self._baseline
-
-    def _refresh_apply_state(self):
-        if not hasattr(self, "apply_button"):
-            return
-        self.apply_button.state(
-            ["!disabled" if self.is_dirty() else "disabled"]
+        return (
+            self.form is not None
+            and self.scope.values(self.get_values()) != self.scope.values(self._baseline)
         )
 
+    def _refresh_apply_state(self):
+        if self.form is None:
+            return
+        state = ["!disabled" if self.is_dirty() else "disabled"]
+        self.apply_button.state(state)
+        self.discard_button.state(state)
+
     def show_settings(self, settings):
-        """Load a complete Settings object into the form and baseline."""
-        self._max_deviation = settings.data.finger_classification_thresholds[-1]
-        self._segment_count = settings.data.finger_segment_count
-        self._apply_display(settings.data.theme, settings.data.ui_scale)
-        self.form.load(settings)
-        self._baseline = self.get_values()
-        self._refresh_apply_state()
+        self._baseline = deepcopy(settings.data)
+        if self.form is not None:
+            self.form.load(settings)
+            self.form.status_var.set(f"{self.scope.name} settings loaded")
+            self._refresh_apply_state()
+
+    def rebase(self, settings, changed_fields):
+        """Refresh applied values without destroying another panel's draft."""
+        if set(changed_fields).intersection(self.scope.fields):
+            self.show_settings(settings)
+        else:
+            self._baseline = deepcopy(settings.data)
+            self.set_theme(settings.data.theme)
+            self._refresh_apply_state()
 
     def apply(self):
-        values = self.get_values()
-        if not values.has_valid_finger_thresholds():
-            self.tracking_error.set(
-                "Thresholds must be strictly increasing between 0° and 120°."
-            )
-            self.show_topic("Tracking")
-            return
-
-        self.tracking_error.set("")
-        if self.on_apply:
-            self.on_apply(values)
-        self._max_deviation = values.finger_classification_thresholds[-1]
-        self._segment_count = values.finger_segment_count
-        self._apply_display(values.theme, values.ui_scale)
-        self._baseline = values
+        data = self.get_values()
+        error = self.scope.validation_error(data)
+        self.form.validation_error.set(error)
+        if error:
+            return False
+        try:
+            result = self.on_apply(self.scope.values(data)) if self.on_apply else data
+        except (OSError, ValueError) as error:
+            self.form.status_var.set(f"Could not save settings: {error}")
+            return False
+        if result is False:
+            return False
+        self._baseline = deepcopy(result if isinstance(result, SettingsData) else data)
         self._refresh_apply_state()
-        self.status_var.set("Settings applied and saved")
+        self.form.status_var.set(f"{self.scope.name} settings applied and saved")
+        return True
 
     def discard(self):
-        """Restore applied values without changing the selected file path."""
-        self.form.load_data(self._baseline)
-        self._segment_count = self._baseline.finger_segment_count
-        self._max_deviation = self._baseline.finger_classification_thresholds[-1]
-        self._refresh_apply_state()
+        if self.form is not None:
+            self.form.load_data(self._baseline)
+            self.form.status_var.set("Unsaved settings discarded")
+            self._refresh_apply_state()
 
-    # ---- display and live preview ----------------------------------
-
-    def _apply_display(self, theme, ui_scale):
-        scale = resolve_scale(self.root, ui_scale)
-        apply_theme(self.root, theme, scale)
-        self._theme_name = theme
-        self._scale = scale
-        if hasattr(self, "form"):
-            self.form.set_theme(theme)
-
-    def apply_display(self, theme, ui_scale):
-        self._apply_display(theme, ui_scale)
-
-    @property
-    def tracking_preview_active(self):
-        return self.form.tracking_preview_active
-
-    def set_preview_data(self, fingers, status):
-        self.form.set_preview_data(fingers, status)
-
-    # ---- shell and validation actions -------------------------------
-
-    def browse(self):
-        self.form.browse()
-
-    def show_topic(self, topic):
-        self.form.show_section(topic)
+    def set_theme(self, theme_name):
+        if self.form is not None:
+            self.form.set_theme(theme_name)

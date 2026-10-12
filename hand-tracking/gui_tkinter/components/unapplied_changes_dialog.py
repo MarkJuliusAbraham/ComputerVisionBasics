@@ -1,9 +1,12 @@
 import tkinter as tk
-from tkinter import filedialog, font, ttk
+from tkinter import font, ttk
+from .buttons import DiscardChangesButton
+
+
 class UnappliedChangesDialog:
     """Modal dialog asking what to do with unapplied changes."""
 
-    def __init__(self, parent, context="Settings", action_label="Apply"):
+    def __init__(self, parent, context="Settings", action_label="Apply", *, return_label="Cancel"):
         self.parent = parent
         self.result = "cancel"
         self.context = context
@@ -28,16 +31,16 @@ class UnappliedChangesDialog:
         )
         ttk.Label(
             body,
-            text=f"{action_label} them before leaving the {context} tab,\n"
-                 "or discard them to return to the saved values.",
+            text=f"{action_label} or discard your changes to leave {context}.\n"
+                 f"Choose {return_label} to keep editing.",
             justify="left",
         ).pack(anchor="w", pady=(6, 0))
 
-        # Button row, right-aligned: action  Discard  Cancel
+        # Button row, right-aligned: action, Discard, return to editing.
         buttons = ttk.Frame(self.top, padding=(24, 8, 24, 20))
         buttons.pack(fill="x")
-        ttk.Button(buttons, text="Cancel", command=self._cancel).pack(side="right")
-        ttk.Button(buttons, text="Discard", command=self._discard).pack(
+        ttk.Button(buttons, text=return_label, command=self._cancel).pack(side="right")
+        DiscardChangesButton(buttons, text="Discard", command=self._discard).pack(
             side="right", padx=8
         )
         self.apply_button = ttk.Button(
@@ -45,7 +48,9 @@ class UnappliedChangesDialog:
         )
         self.apply_button.pack(side="right")
 
-        self.top.bind("<Return>", lambda e: self._apply())
+        for button in buttons.winfo_children():
+            button.bind("<Return>", self._on_return)
+        self.top.bind("<Return>", self._on_return)
         self.top.bind("<Escape>", lambda e: self._cancel())
 
     def show(self):
@@ -63,6 +68,13 @@ class UnappliedChangesDialog:
         x = self.parent.winfo_rootx() + (self.parent.winfo_width() - w) // 2
         y = self.parent.winfo_rooty() + (self.parent.winfo_height() - h) // 2
         self.top.geometry(f"+{max(x, 0)}+{max(y, 0)}")
+
+    def _on_return(self, event):
+        if isinstance(event.widget, ttk.Button):
+            event.widget.invoke()
+        else:
+            self._apply()
+        return "break"
 
     def _apply(self):
         self.result = self.action_result

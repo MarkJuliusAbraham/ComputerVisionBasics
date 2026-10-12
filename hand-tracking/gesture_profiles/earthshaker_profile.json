@@ -33,7 +33,7 @@
   "gestures": [
     {
       "id": "r",
-      "name": "echo",
+      "name": "Echo",
       "match": {
         "fingers": {
           "index": [
@@ -63,7 +63,7 @@
     },
     {
       "id": "q",
-      "name": "fissure",
+      "name": "Fissure",
       "match": {
         "fingers": {
           "index": [
@@ -98,7 +98,7 @@
     },
     {
       "id": "w",
-      "name": "enchant_totem",
+      "name": "Enchant Totem",
       "match": {
         "fingers": {
           "index": [
@@ -134,8 +134,8 @@
       ]
     },
     {
-      "id": "gesture_30fc85cf",
-      "name": "1",
+      "id": "gesture_11e44285",
+      "name": "Aftershock",
       "match": {
         "fingers": {
           "thumb": [
@@ -164,7 +164,7 @@
         ],
         "delay_ms_between_steps": 0
       },
-      "tracked_finger": "index"
+      "tracked_finger": null
     }
   ]
 }

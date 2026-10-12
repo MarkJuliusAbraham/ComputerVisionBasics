@@ -39,12 +39,12 @@ class ControlCallbacks:
     on_apply: Callable[[Any], Any] | None = None
     on_camera_switch: Callable[[int], Any] | None = None
     on_toggle_tracking: Callable[[], Any] | None = None
-    on_tracking_tab_active: Callable[[bool], Any] | None = None
+    on_main_active: Callable[[bool], Any] | None = None
 
 
 @dataclass
 class PanelSet:
-    """The replaceable panels hosted by a control window."""
+    """Replaceable panels hosted by either the hub or a tracking window."""
 
     main: Any
     settings: Any
@@ -59,6 +59,7 @@ class ControlWindowContext:
     callbacks: ControlCallbacks
     panels: PanelSet
     camera_index: int = 0
+    tracking_modules: Any | None = None
 
 
 @dataclass

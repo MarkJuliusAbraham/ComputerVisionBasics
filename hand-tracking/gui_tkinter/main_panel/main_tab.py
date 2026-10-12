@@ -1,58 +1,48 @@
+"""The application hub: shared camera and registered tracking workspaces."""
+
 from tkinter import ttk
 
-from .camera_section import CameraSection
-from .live_gesture_section import LiveGestureSection
+from gui_tkinter.components.camera_section import CameraSection
+from gui_tkinter.components.scrollable_frame import ScrollableFrame
+from gui_tkinter.components.theme import ThemeMetrics
 
 
 class MainTab(ttk.Frame):
-    """Main page controls and live hand diagnostics."""
-
-    def __init__(
-        self,
-        master,
-        on_restart,
-        on_close,
-        camera_index=0,
-        on_camera_switch=None,
-        on_toggle_tracking=None,
-        theme_name="Light",
-        max_deviation=75.0,
-    ):
-        super().__init__(master)
-        self.on_toggle_tracking = on_toggle_tracking
-
+    def __init__(self, master, tracking_modules, callbacks, camera_index=0):
+        super().__init__(master, padding=20)
+        self.appearance = ThemeMetrics(self)
         actions = ttk.Frame(self)
-        actions.pack(fill="x", padx=20, pady=(14, 2))
-        ttk.Button(actions, text="Restart", command=on_restart).pack(
-            side="left", fill="x", expand=True, padx=(0, 4)
+        actions.pack(side="bottom", fill="x", pady=(16, 0))
+        ttk.Button(actions, text="Exit", command=callbacks.on_close).pack(side="right")
+        ttk.Button(actions, text="Restart", command=callbacks.on_restart).pack(
+            side="right", padx=(0, 8),
         )
-        ttk.Button(actions, text="Exit", command=on_close).pack(
-            side="left", fill="x", expand=True, padx=(4, 0)
+        scroll = ScrollableFrame(self)
+        scroll.pack(fill="both", expand=True)
+        ttk.Label(scroll.content, text="Tracking hub", font=self.appearance.heading_font).pack(
+            anchor="w", pady=(0, 6),
         )
-
-        pause_row = ttk.Frame(self)
-        pause_row.pack(fill="x", padx=20, pady=(2, 4))
-        self.pause_tracking_button = ttk.Button(
-            pause_row, text="Pause tracking", command=self._toggle_tracking,
-            width=24,
-        )
-        self.pause_tracking_button.pack(anchor="center", pady=(0, 4))
-
+        ttk.Label(
+            scroll.content, text="Open a tracking workspace to inspect data and configure its behavior.",
+            wraplength=600,
+        ).pack(anchor="w", pady=(0, 20))
         self.camera = CameraSection(
-            self, camera_index=camera_index, on_switch=on_camera_switch,
+            scroll.content, camera_index=camera_index, on_switch=callbacks.on_camera_switch,
         )
-        self.camera.pack(fill="x", padx=20, pady=(8, 8))
-
-        self.live_gestures = LiveGestureSection(
-            self, theme_name=theme_name, max_deviation=max_deviation,
-        )
-        self.live_gestures.pack(fill="both", expand=True, padx=20, pady=(8, 16))
-
-    def _toggle_tracking(self):
-        if self.on_toggle_tracking:
-            self.on_toggle_tracking()
-
-    def set_tracking_paused(self, paused):
-        self.pause_tracking_button.configure(
-            text="Resume tracking" if paused else "Pause tracking"
-        )
+        self.camera.pack(fill="x", pady=(0, 20))
+        group = ttk.LabelFrame(scroll.content, text="Tracking workspaces", padding=16)
+        group.pack(fill="x")
+        for module in tracking_modules.modules.values():
+            row = ttk.Frame(group)
+            row.pack(fill="x", pady=8)
+            row.columnconfigure(0, weight=1)
+            ttk.Label(row, text=module.name, font=self.appearance.heading_font).grid(
+                row=0, column=0, sticky="w",
+            )
+            ttk.Label(row, text=module.description, wraplength=500).grid(
+                row=1, column=0, sticky="w", pady=(6, 0), padx=(0, 20),
+            )
+            ttk.Button(
+                row, text="Open", command=lambda key=module.key: tracking_modules.open(key),
+            ).grid(row=0, column=1, rowspan=2, sticky="e")
+        self.bind("<<ThemeChanged>>", lambda _event: self.appearance.refresh())

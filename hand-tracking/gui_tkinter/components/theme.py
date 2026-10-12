@@ -1,4 +1,5 @@
 import tkinter as tk
+from dataclasses import dataclass
 from tkinter import font as tkfont
 from tkinter import ttk
 
@@ -17,16 +18,21 @@ _GESTURE_COLORS = {
         "straight": "#1e7e34",
         "partial": "#8a6100",
         "curled": "#b54708",
+        "very_curled": "#9950a8",
+        "nearly_closed": "#b83273",
         "closed": "#c5221f",
     },
     "Dark": {
         "straight": "#81c995",
         "partial": "#fdd663",
         "curled": "#ffb77c",
+        "very_curled": "#c8a0e8",
+        "nearly_closed": "#f39ac5",
         "closed": "#f28b82",
     },
 }
-_GESTURE_BAR_BACKGROUNDS = {"Light": "#a0a0a0", "Dark": "#595959"}
+_GESTURE_BAR_BACKGROUNDS = {"Light": "#e5e7eb", "Dark": "#343a43"}
+_TEXT_COLORS = {"Light": "#202020", "Dark": "#f4f4f4"}
 
 BASE_FONT_SIZE = 9            # points at 100%
 BASE_BUTTON_PADDING = (8, 3)  # pixels at 100%
@@ -36,11 +42,41 @@ _SV_FONTS = ("SunValleyBodyFont", "SunValleyCaptionFont", "SunValleyBodyStrongFo
 _system_scale = None
 
 
+@dataclass(frozen=True)
+class AlertPalette:
+    foreground: str
+    selection_background: str
+
+
+class ThemeColors:
+    """Semantic UI colors resolved from the currently painted theme."""
+
+    HIGH_ALERT = {
+        "Light": AlertPalette("#b42318", "#fee4e2"),
+        "Dark": AlertPalette("#ff9b94", "#532422"),
+    }
+
+    def __init__(self, widget):
+        self.widget = widget
+
+    @property
+    def high_alert(self):
+        theme = ttk.Style(self.widget).theme_use()
+        name = "Dark" if theme.endswith("dark") else "Light"
+        return self.HIGH_ALERT[name]
+
+    @property
+    def destructive(self):
+        """Use the theme's alert color for actions that discard user changes."""
+        return self.high_alert.foreground
+
+
 class ThemeMetrics:
     """Share the active theme's typography and scaled spacing within a form."""
 
     def __init__(self, widget):
         self.widget = widget
+        self.colors = ThemeColors(widget)
         self.font = tkfont.Font(root=widget)
         self.heading_font = self.font.copy()
         self.refresh()
@@ -83,7 +119,8 @@ def resolve_scale(root, value):
 def gesture_classification_color(theme_name, classification):
     """Return the active theme's semantic color for a finger classification."""
     palette = _GESTURE_COLORS.get(theme_name, _GESTURE_COLORS["Light"])
-    return palette.get(classification, palette["straight"])
+    key = getattr(classification, "value", classification)
+    return palette.get(key, palette["straight"])
 
 
 def gesture_bar_background(theme_name):
@@ -91,6 +128,46 @@ def gesture_bar_background(theme_name):
     return _GESTURE_BAR_BACKGROUNDS.get(
         theme_name, _GESTURE_BAR_BACKGROUNDS["Light"]
     )
+
+
+@dataclass(frozen=True)
+class DeviationPalette:
+    """Colors shared by live bars, editable bands, handles, and legends."""
+
+    theme_name: str
+    surface: str
+    track: str
+    foreground: str
+
+    def classification(self, category):
+        return gesture_classification_color(self.theme_name, category)
+
+
+class DeviationTheme:
+    """Resolve canvas colors from the application theme and active ttk styles."""
+
+    def __init__(self, widget):
+        self.widget = widget
+
+    def palette(self, theme_name):
+        style = ttk.Style(self.widget)
+        surface = style.lookup("TFrame", "background")
+        if not surface:
+            suffix = "dark" if style.theme_use().endswith("dark") else "light"
+            try:
+                surface = self.widget.tk.call(
+                    "set", f"::ttk::theme::sv_{suffix}::colors(-bg)"
+                )
+            except tk.TclError:
+                pass
+            surface = surface or self.widget.winfo_toplevel().cget("background")
+        foreground = (
+            style.lookup("TLabel", "foreground")
+            or _TEXT_COLORS.get(theme_name, _TEXT_COLORS["Light"])
+        )
+        return DeviationPalette(
+            theme_name, surface, gesture_bar_background(theme_name), foreground,
+        )
 
 
 def apply_theme(root, name, scale=1.0):

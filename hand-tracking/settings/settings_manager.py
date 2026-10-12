@@ -1,6 +1,8 @@
 import json
 import os
-from dataclasses import asdict, dataclass, field
+from copy import deepcopy
+from dataclasses import asdict, dataclass, field, replace
+from typing import Callable
 
 from gestures.finger_classifier import (
     FINGER_CATEGORIES_BY_COUNT,
@@ -39,10 +41,7 @@ DEFAULT_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "settings.json"
 )
 
-THEMES = (
-    "Light", "Dark", "Tkinter", "Classic Desktop",
-    "ImGui Light", "ImGui Dark", "ImGui Classic",
-)
+THEMES = ("Light", "Dark")
 UI_SCALES = ("Auto", "100%", "125%", "150%", "175%", "200%")
 @dataclass
 class SettingsData:
@@ -65,6 +64,9 @@ class SettingsData:
         fields = cls.__dataclass_fields__
         data = {key: value for key, value in values.items() if key in fields}
         defaults = cls()
+        if data.get("theme") not in THEMES:
+            previous_theme = str(data.get("theme", "")).lower()
+            data["theme"] = "Dark" if previous_theme.endswith("dark") else "Light"
         try:
             segment_count = int(data.get("finger_segment_count", 0))
         except (TypeError, ValueError, OverflowError):
@@ -134,6 +136,39 @@ DEFAULTS = SettingsData()
 CHOICES = {"theme": THEMES, "ui_scale": UI_SCALES}
 
 
+@dataclass(frozen=True)
+class SettingsScope:
+    """The settings fields and validation owned by one module or panel."""
+
+    name: str
+    fields: tuple[str, ...]
+    validator: Callable[[SettingsData], str] | None = None
+
+    def values(self, data):
+        return {key: deepcopy(getattr(data, key)) for key in self.fields}
+
+    def merge(self, data, values):
+        if set(values) - set(self.fields):
+            raise ValueError(f"Unexpected fields for {self.name} settings")
+        return replace(data, **deepcopy(values))
+
+    def validation_error(self, data):
+        return self.validator(data) if self.validator is not None else ""
+
+
+def _validate_hand_settings(data):
+    if not data.has_valid_finger_thresholds():
+        return "Thresholds must be strictly increasing between 0° and 120°."
+    return ""
+
+
+SHARED_SETTINGS_SCOPE = SettingsScope("Application", ("profile", "theme", "ui_scale"))
+HAND_SETTINGS_SCOPE = SettingsScope("Hand tracking", (
+    "track_hands", "finger_segment_count", "finger_classification_thresholds",
+    "finger_deviation_calculation",
+), validator=_validate_hand_settings)
+
+
 class Settings:
     """Owns the settings file and its current SettingsData."""
 
@@ -186,6 +221,9 @@ class Settings:
 
     def update(self, data):
         updated = data if isinstance(data, SettingsData) else SettingsData.from_dict(data)
+        for key, allowed in CHOICES.items():
+            if getattr(updated, key) not in allowed:
+                raise ValueError(f"Invalid {key}: choose one of {', '.join(allowed)}")
         if not updated.has_valid_finger_thresholds():
             raise ValueError("Finger thresholds must be increasing")
         previous = self.data
@@ -195,6 +233,11 @@ class Settings:
         except OSError:
             self.data = previous
             raise
+
+    def update_fields(self, values):
+        """Commit a panel's fields while preserving every other module's values."""
+        self.update(replace(self.data, **deepcopy(values)))
+        return self.data
 
     def save(self):
         directory = os.path.dirname(self.path)

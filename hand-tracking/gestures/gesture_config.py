@@ -6,6 +6,7 @@ from pathlib import Path
 
 from gestures.finger_classifier import FINGER_POSITIONS
 from gestures.palm_detector import PalmPosition
+from gestures.gesture_validation import GestureCriteriaValidator
 
 
 DEFAULT_GESTURE_PROFILE_DIR = Path(__file__).resolve().parents[1] / "gesture_profiles"
@@ -197,10 +198,10 @@ class GestureConfig:
             "gestures": [definition.to_dict() for definition in self.definitions],
         }
 
-    def save(self, path=DEFAULT_GESTURE_CONFIG):
+    def save(self, path=DEFAULT_GESTURE_CONFIG, *, allow_conflicts=False):
         # Validate through the same parser used at startup before replacing a
         # profile, including commands, reset criteria, and repeat settings.
-        self.from_dict(self.to_dict())
+        self.from_dict(self.to_dict(), allow_conflicts=allow_conflicts)
         target = Path(path)
         target.parent.mkdir(parents=True, exist_ok=True)
         temporary = target.with_name(target.name + ".tmp")
@@ -219,10 +220,12 @@ class GestureConfig:
         except (OSError, json.JSONDecodeError) as error:
             raise ValueError(f"Could not load gesture config {path}: {error}") from error
 
-        return cls.from_dict(raw)
+        # Keep structurally valid profiles available for inspection and repair.
+        # Their conflict report determines which gestures can invoke commands.
+        return cls.from_dict(raw, allow_conflicts=True)
 
     @classmethod
-    def from_dict(cls, raw):
+    def from_dict(cls, raw, *, allow_conflicts=False):
         """Validate profile data consistently for loading and saving."""
 
         if not isinstance(raw, dict) or raw.get("version") != 1:
@@ -281,27 +284,26 @@ class GestureConfig:
                 tracked_finger=tracked_finger,
             ))
 
-        cls._validate_no_overlaps(definitions)
         reset_match = GestureMatch.from_dict(raw.get("reset_match"), "reset_match")
+        if not allow_conflicts:
+            cls._validate_no_conflicts(definitions, reset_match)
         return cls(
             tuple(definitions), reset_match,
             RepeatSettings.from_dict(raw.get("repeat_settings")),
         )
 
     @staticmethod
-    def _validate_no_overlaps(definitions):
-        for definition in definitions:
-            if definition.match.palm is None and not definition.match.fingers:
-                raise ValueError(
-                    f"Gesture {definition.id!r} must constrain palm or at least one finger"
-                )
-        for index, first in enumerate(definitions):
-            for second in definitions[index + 1:]:
-                if GestureConfig.matches_can_overlap(first.match, second.match):
-                    raise ValueError(
-                        f"Gestures {first.id!r} and {second.id!r} overlap; "
-                        "make their match rules mutually exclusive"
-                    )
+    def _validate_no_conflicts(definitions, reset_match):
+        report = GestureCriteriaValidator().validate(
+            {definition.id: definition.match for definition in definitions}, reset_match,
+        )
+        if report.conflicts:
+            gesture_id = next(iter(report.conflicts))
+            names = {definition.id: definition.name for definition in definitions}
+            raise ValueError(
+                f'Gesture "{names[gesture_id]}" is in conflict: '
+                + report.conflicts[gesture_id].description(names)
+            )
 
     @staticmethod
     def matches_can_overlap(first, second):
