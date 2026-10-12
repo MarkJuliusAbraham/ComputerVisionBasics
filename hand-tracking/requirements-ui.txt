@@ -1,0 +1,4 @@
+# Install this UI dependency in the same environment as the existing app:
+# python -m pip install -r requirements-ui.txt
+dearpygui>=2.0,<3.0
+dearpygui-ext>=2.0,<3.0

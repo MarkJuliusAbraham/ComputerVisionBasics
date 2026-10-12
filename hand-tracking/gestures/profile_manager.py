@@ -55,16 +55,21 @@ class GestureProfileManager:
             self._save_selection()
             return
 
-        source = Path(saved.get("source_path", DEFAULT_GESTURE_PROFILE_DIR))
+        source_value = saved.get("source_path")
+        source = Path(source_value) if isinstance(source_value, str) and source_value else DEFAULT_GESTURE_PROFILE_DIR
         if source.suffix.lower() == ".json":
             if not source.is_file():
                 source = DEFAULT_GESTURE_PROFILE_DIR
         else:
-            source.mkdir(parents=True, exist_ok=True)
-            ensure_default_gesture_profile(source)
+            try:
+                source.mkdir(parents=True, exist_ok=True)
+                ensure_default_gesture_profile(source)
+            except OSError:
+                source = DEFAULT_GESTURE_PROFILE_DIR
         self.source_path = str(source)
 
-        active = Path(saved.get("active_profile", DEFAULT_GESTURE_CONFIG))
+        active_value = saved.get("active_profile")
+        active = Path(active_value) if isinstance(active_value, str) and active_value else DEFAULT_GESTURE_CONFIG
         profiles = self.list_profiles(self.source_path)
         if active not in profiles:
             active = self._preferred_profile(profiles)
@@ -96,6 +101,7 @@ class GestureProfileManager:
         if selected.suffix.lower() == ".json":
             if not selected.is_file():
                 raise ValueError("Select an existing gesture profile JSON file")
+            GestureConfig.load(selected)
             self.source_path = str(selected)
             self.active_profile = str(selected)
         else:
@@ -114,7 +120,9 @@ class GestureProfileManager:
         profile = Path(path)
         if not profile.is_file() or profile.suffix.lower() != ".json":
             raise ValueError("Select an existing .json gesture profile")
+        GestureConfig.load(profile)
         self.active_profile = str(profile)
+        self.source_path = str(profile.parent)
         self._save_selection()
 
     def add_profile(self, path):

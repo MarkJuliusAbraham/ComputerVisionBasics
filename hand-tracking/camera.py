@@ -13,6 +13,7 @@ class Camera:
         self.height = height
         self.index = None
         self._requested_index = int(camera_index)
+        self._request_generation = 0
         self._frame = None
         self._status = ("opening", int(camera_index), None)
         self._lock = threading.Lock()
@@ -33,7 +34,7 @@ class Camera:
     @property
     def cap(self):
         # Kept for the application loop's existing unavailable-camera check.
-        return self.index is not None
+        return True if self.index is not None else None
 
     def request_switch(self, camera_index):
         """Queue a camera change; device handles remain private to the worker."""
@@ -42,6 +43,7 @@ class Camera:
             if self._stopping.is_set():
                 return
             self._requested_index = camera_index
+            self._request_generation += 1
             self._frame = None
             state = "switching" if self.index is not None else "opening"
             self._status = (state, camera_index, self.index)
@@ -91,17 +93,20 @@ class Camera:
         active_index = None
         requested_index = self._requested_index
         attempted_index = None
+        attempted_generation = None
         try:
             while not self._stopping.is_set():
-                self._wake.clear()
                 with self._lock:
+                    self._wake.clear()
                     requested_index = self._requested_index
-                if capture is None or requested_index != attempted_index:
+                    requested_generation = self._request_generation
+                if capture is None or requested_generation != attempted_generation:
                     if capture is not None:
                         capture.release()
                         capture = None
                     requested = requested_index
                     attempted_index = requested
+                    attempted_generation = requested_generation
                     capture, error = self._try_open(requested)
                     if capture is None and active_index is not None and active_index != requested:
                         capture, restore_error = self._try_open(active_index)
@@ -113,6 +118,11 @@ class Camera:
                         message = error or f"Could not open camera {requested}"
                         self._publish_status("failed", requested, None, message)
                         active_index = None
+                        with self._lock:
+                            changed = self._request_generation != attempted_generation
+                            self._frame = None
+                        if changed:
+                            continue
                         self._wake.wait()
                         continue
                     if error is None:
@@ -131,10 +141,15 @@ class Camera:
                     capture = None
                     active_index = None
                     self._publish_status("failed", attempted_index, None, failure_message)
+                    with self._lock:
+                        self._frame = None
+                        changed = self._request_generation != attempted_generation
+                    if not changed:
+                        self._wake.wait()
                     continue
                 with self._lock:
                     # A switch may have been queued during read().
-                    has_pending_switch = self._requested_index != attempted_index
+                    has_pending_switch = self._request_generation != attempted_generation
                     if not has_pending_switch:
                         self._frame = frame
                         self._status = ("ready", attempted_index, active_index, ready_message)

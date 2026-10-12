@@ -1,0 +1,232 @@
+{
+  "version": 1,
+  "reset_match": {
+    "fingers": {
+      "index": [
+        "closed",
+        "curled",
+        "partial"
+      ],
+      "middle": [
+        "closed",
+        "curled",
+        "partial"
+      ],
+      "ring": [
+        "closed",
+        "curled",
+        "partial"
+      ],
+      "pinky": [
+        "closed",
+        "curled",
+        "partial"
+      ]
+    }
+  },
+  "gestures": [
+    {
+      "id": "r",
+      "name": "Invoke",
+      "match": {
+        "fingers": {
+          "index": [
+            "straight"
+          ],
+          "middle": [
+            "straight"
+          ],
+          "ring": [
+            "straight"
+          ],
+          "pinky": [
+            "straight"
+          ]
+        }
+      },
+      "commands": {
+        "steps": [
+          {
+            "type": "key_tap",
+            "value": "r"
+          }
+        ],
+        "delay_ms_between_steps": 0
+      }
+    },
+    {
+      "id": "q",
+      "name": "Quas",
+      "match": {
+        "fingers": {
+          "index": [
+            "straight"
+          ],
+          "middle": [
+            "straight"
+          ],
+          "ring": [
+            "closed"
+          ],
+          "pinky": [
+            "closed"
+          ]
+        },
+        "palm": "not_facing_camera"
+      },
+      "commands": {
+        "steps": [
+          {
+            "type": "key_tap",
+            "value": "q"
+          }
+        ],
+        "delay_ms_between_steps": 0
+      },
+      "repeat_fingers": [
+        "index",
+        "middle"
+      ]
+    },
+    {
+      "id": "w",
+      "name": "Wex",
+      "match": {
+        "fingers": {
+          "index": [
+            "closed",
+            "curled",
+            "partial"
+          ],
+          "middle": [
+            "straight"
+          ],
+          "ring": [
+            "straight"
+          ],
+          "pinky": [
+            "straight"
+          ]
+        },
+        "palm": "not_facing_camera"
+      },
+      "commands": {
+        "steps": [
+          {
+            "type": "key_tap",
+            "value": "w"
+          }
+        ],
+        "delay_ms_between_steps": 0
+      },
+      "repeat_fingers": [
+        "middle",
+        "ring"
+      ]
+    },
+    {
+      "id": "e",
+      "name": "Exort",
+      "match": {
+        "fingers": {
+          "index": [
+            "straight"
+          ],
+          "middle": [
+            "closed",
+            "curled"
+          ],
+          "ring": [
+            "closed",
+            "curled",
+            "partial"
+          ],
+          "pinky": [
+            "closed",
+            "curled",
+            "partial"
+          ]
+        },
+        "palm": "not_facing_camera"
+      },
+      "commands": {
+        "steps": [
+          {
+            "type": "key_tap",
+            "value": "e"
+          }
+        ],
+        "delay_ms_between_steps": 0
+      },
+      "repeat_fingers": [
+        "index"
+      ]
+    },
+    {
+      "id": "d",
+      "name": "Cast 1",
+      "match": {
+        "fingers": {
+          "index": [
+            "straight"
+          ],
+          "middle": [
+            "straight"
+          ],
+          "ring": [
+            "closed",
+            "curled",
+            "partial"
+          ],
+          "pinky": [
+            "closed",
+            "curled",
+            "partial"
+          ]
+        },
+        "palm": "facing_camera"
+      },
+      "commands": {
+        "steps": [
+          {
+            "type": "key_tap",
+            "value": "d"
+          }
+        ],
+        "delay_ms_between_steps": 0
+      }
+    },
+    {
+      "id": "f",
+      "name": "Cast 2",
+      "match": {
+        "fingers": {
+          "index": [
+            "closed",
+            "curled",
+            "partial"
+          ],
+          "middle": [
+            "straight"
+          ],
+          "ring": [
+            "straight"
+          ],
+          "pinky": [
+            "straight"
+          ]
+        },
+        "palm": "facing_camera"
+      },
+      "commands": {
+        "steps": [
+          {
+            "type": "key_tap",
+            "value": "f"
+          }
+        ],
+        "delay_ms_between_steps": 0
+      }
+    }
+  ]
+}

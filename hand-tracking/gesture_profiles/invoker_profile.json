@@ -1,0 +1,250 @@
+{
+  "version": 1,
+  "reset_match": {
+    "fingers": {
+      "index": [
+        "closed",
+        "curled",
+        "nearly_closed",
+        "very_curled"
+      ],
+      "middle": [
+        "closed",
+        "curled",
+        "nearly_closed",
+        "very_curled"
+      ],
+      "ring": [
+        "closed",
+        "curled",
+        "nearly_closed",
+        "very_curled"
+      ],
+      "pinky": [
+        "closed",
+        "curled",
+        "nearly_closed",
+        "very_curled"
+      ]
+    }
+  },
+  "repeat_settings": {
+    "initial_displacement": 0.029999999329447746,
+    "distance_threshold": 0.05999999865889549,
+    "min_interval_seconds": 0.02,
+    "max_repeats": 2
+  },
+  "gestures": [
+    {
+      "id": "r",
+      "name": "Invoke",
+      "match": {
+        "fingers": {
+          "index": [
+            "partial",
+            "straight"
+          ],
+          "middle": [
+            "straight"
+          ],
+          "ring": [
+            "straight"
+          ],
+          "pinky": [
+            "closed"
+          ]
+        },
+        "palm": "not_facing_camera"
+      },
+      "commands": {
+        "steps": [
+          {
+            "type": "key_tap",
+            "value": "r"
+          }
+        ],
+        "delay_ms_between_steps": 0
+      },
+      "tracked_finger": null
+    },
+    {
+      "id": "q",
+      "name": "Quas",
+      "match": {
+        "fingers": {
+          "index": [
+            "straight"
+          ],
+          "middle": [
+            "straight"
+          ],
+          "ring": [
+            "closed"
+          ],
+          "pinky": [
+            "closed"
+          ]
+        },
+        "palm": "not_facing_camera"
+      },
+      "commands": {
+        "steps": [
+          {
+            "type": "key_tap",
+            "value": "q"
+          }
+        ],
+        "delay_ms_between_steps": 0
+      },
+      "tracked_finger": "middle",
+      "repeat_fingers": [
+        "index",
+        "middle"
+      ]
+    },
+    {
+      "id": "w",
+      "name": "Wex",
+      "match": {
+        "fingers": {
+          "index": [
+            "closed",
+            "curled",
+            "partial"
+          ],
+          "middle": [
+            "straight"
+          ],
+          "ring": [
+            "straight"
+          ],
+          "pinky": [
+            "straight"
+          ]
+        },
+        "palm": "not_facing_camera"
+      },
+      "commands": {
+        "steps": [
+          {
+            "type": "key_tap",
+            "value": "w"
+          }
+        ],
+        "delay_ms_between_steps": 0
+      },
+      "tracked_finger": "ring",
+      "repeat_fingers": [
+        "middle",
+        "ring"
+      ]
+    },
+    {
+      "id": "e",
+      "name": "Exort",
+      "match": {
+        "fingers": {
+          "index": [
+            "curled",
+            "partial",
+            "straight"
+          ],
+          "middle": [
+            "closed",
+            "nearly_closed",
+            "very_curled"
+          ],
+          "ring": [
+            "closed",
+            "nearly_closed",
+            "very_curled"
+          ],
+          "pinky": [
+            "closed",
+            "nearly_closed",
+            "very_curled"
+          ]
+        },
+        "palm": "not_facing_camera"
+      },
+      "commands": {
+        "steps": [
+          {
+            "type": "key_tap",
+            "value": "e"
+          }
+        ],
+        "delay_ms_between_steps": 0
+      },
+      "tracked_finger": "index",
+      "repeat_fingers": [
+        "index"
+      ]
+    },
+    {
+      "id": "d",
+      "name": "Cast 1",
+      "match": {
+        "fingers": {
+          "thumb": [
+            "straight"
+          ],
+          "middle": [
+            "curled",
+            "partial",
+            "straight",
+            "very_curled"
+          ],
+          "ring": [
+            "closed",
+            "nearly_closed"
+          ]
+        },
+        "palm": "facing_camera"
+      },
+      "commands": {
+        "steps": [
+          {
+            "type": "key_tap",
+            "value": "d"
+          }
+        ],
+        "delay_ms_between_steps": 0
+      },
+      "tracked_finger": "index"
+    },
+    {
+      "id": "f",
+      "name": "Cast 2",
+      "match": {
+        "fingers": {
+          "index": [
+            "closed",
+            "curled",
+            "partial"
+          ],
+          "middle": [
+            "straight"
+          ],
+          "ring": [
+            "straight"
+          ],
+          "pinky": [
+            "straight"
+          ]
+        },
+        "palm": "facing_camera"
+      },
+      "commands": {
+        "steps": [
+          {
+            "type": "key_tap",
+            "value": "f"
+          }
+        ],
+        "delay_ms_between_steps": 0
+      },
+      "tracked_finger": "index"
+    }
+  ]
+}

@@ -1,0 +1,170 @@
+{
+  "version": 1,
+  "reset_match": {
+    "fingers": {
+      "index": [
+        "closed",
+        "curled",
+        "partial"
+      ],
+      "middle": [
+        "closed",
+        "curled",
+        "partial"
+      ],
+      "ring": [
+        "closed",
+        "curled",
+        "partial"
+      ],
+      "pinky": [
+        "closed",
+        "curled",
+        "partial"
+      ]
+    }
+  },
+  "repeat_settings": {
+    "initial_displacement": 0.029999999329447746,
+    "distance_threshold": 0.09000000357627869,
+    "min_interval_seconds": 0.05,
+    "max_repeats": 2
+  },
+  "gestures": [
+    {
+      "id": "r",
+      "name": "echo",
+      "match": {
+        "fingers": {
+          "index": [
+            "straight"
+          ],
+          "middle": [
+            "straight"
+          ],
+          "ring": [
+            "straight"
+          ],
+          "pinky": [
+            "straight"
+          ]
+        }
+      },
+      "commands": {
+        "steps": [
+          {
+            "type": "key_tap",
+            "value": "r"
+          }
+        ],
+        "delay_ms_between_steps": 0
+      },
+      "tracked_finger": "index"
+    },
+    {
+      "id": "q",
+      "name": "fissure",
+      "match": {
+        "fingers": {
+          "index": [
+            "straight"
+          ],
+          "middle": [
+            "straight"
+          ],
+          "ring": [
+            "closed"
+          ],
+          "pinky": [
+            "closed"
+          ]
+        },
+        "palm": "not_facing_camera"
+      },
+      "commands": {
+        "steps": [
+          {
+            "type": "key_tap",
+            "value": "q"
+          }
+        ],
+        "delay_ms_between_steps": 0
+      },
+      "tracked_finger": "index",
+      "repeat_fingers": [
+        "index",
+        "middle"
+      ]
+    },
+    {
+      "id": "w",
+      "name": "enchant_totem",
+      "match": {
+        "fingers": {
+          "index": [
+            "closed",
+            "curled",
+            "partial"
+          ],
+          "middle": [
+            "straight"
+          ],
+          "ring": [
+            "straight"
+          ],
+          "pinky": [
+            "straight"
+          ]
+        },
+        "palm": "not_facing_camera"
+      },
+      "commands": {
+        "steps": [
+          {
+            "type": "key_tap",
+            "value": "w"
+          }
+        ],
+        "delay_ms_between_steps": 0
+      },
+      "tracked_finger": "middle",
+      "repeat_fingers": [
+        "middle",
+        "ring"
+      ]
+    },
+    {
+      "id": "gesture_30fc85cf",
+      "name": "1",
+      "match": {
+        "fingers": {
+          "thumb": [
+            "straight"
+          ],
+          "index": [
+            "straight"
+          ],
+          "middle": [
+            "straight"
+          ],
+          "ring": [
+            "straight"
+          ],
+          "pinky": [
+            "partial"
+          ]
+        }
+      },
+      "commands": {
+        "steps": [
+          {
+            "type": "key_tap",
+            "value": "a"
+          }
+        ],
+        "delay_ms_between_steps": 0
+      },
+      "tracked_finger": "index"
+    }
+  ]
+}

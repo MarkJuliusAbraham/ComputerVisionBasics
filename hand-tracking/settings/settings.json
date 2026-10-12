@@ -1,0 +1,15 @@
+{
+  "track_hands": true,
+  "profile": true,
+  "theme": "Dark",
+  "ui_scale": "100%",
+  "finger_segment_count": 6,
+  "finger_classification_thresholds": [
+    15.0,
+    29.0,
+    58.5,
+    73.25,
+    88.0
+  ],
+  "finger_deviation_calculation": "default"
+}

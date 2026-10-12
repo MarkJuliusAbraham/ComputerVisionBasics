@@ -1,4 +1,5 @@
 import json
+import math
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -166,6 +167,8 @@ class RepeatSettings:
             raise ValueError(
                 "Initial displacement, repeat distance, and interval must be numbers"
             )
+        if any(not math.isfinite(number) for number in numeric):
+            raise ValueError("Repeat values must be finite numbers")
         if (
             settings.initial_displacement < 0
             or settings.distance_threshold <= 0
@@ -195,15 +198,9 @@ class GestureConfig:
         }
 
     def save(self, path=DEFAULT_GESTURE_CONFIG):
-        ids = [definition.id for definition in self.definitions]
-        if len(set(ids)) != len(ids):
-            raise ValueError("Gesture IDs must be unique")
-        if any(
-            not isinstance(definition.name, str) or not definition.name.strip()
-            for definition in self.definitions
-        ):
-            raise ValueError("Gesture names cannot be empty")
-        self._validate_no_overlaps(self.definitions)
+        # Validate through the same parser used at startup before replacing a
+        # profile, including commands, reset criteria, and repeat settings.
+        self.from_dict(self.to_dict())
         target = Path(path)
         target.parent.mkdir(parents=True, exist_ok=True)
         temporary = target.with_name(target.name + ".tmp")
@@ -221,6 +218,12 @@ class GestureConfig:
                 raw = json.load(file)
         except (OSError, json.JSONDecodeError) as error:
             raise ValueError(f"Could not load gesture config {path}: {error}") from error
+
+        return cls.from_dict(raw)
+
+    @classmethod
+    def from_dict(cls, raw):
+        """Validate profile data consistently for loading and saving."""
 
         if not isinstance(raw, dict) or raw.get("version") != 1:
             raise ValueError("Gesture config must be an object with version 1")

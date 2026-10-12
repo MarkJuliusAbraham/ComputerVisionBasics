@@ -68,9 +68,11 @@ class GestureHandler:
         self._clear_repeat_state()
         self._clear_path()
 
-    def update(self):
+    def update(self, allow_repeats=True):
         """Advance delayed command actions from the application event loop."""
         self.command_executor.update()
+        if allow_repeats:
+            self._fire_pending_repeat()
 
     def close(self):
         self.command_executor.clear()
@@ -91,6 +93,7 @@ class GestureHandler:
             self._frame_aspect = frame_size[1] / frame_size[0]
         # Reset always gets checked first.
         if self.matcher.matches(self.config.reset_match, state):
+            self.command_executor.clear()
             self._reset_active = True
             self._input_locked = False
             self._clear_repeat_state()
@@ -186,6 +189,8 @@ class GestureHandler:
         self._path_points.append(point)
         if len(self._path_points) > self.MAX_PATH_POINTS:
             self._path_points = self._path_points[::2]
+            if self._path_points[-1] != point:
+                self._path_points.append(point)
         return previous, point
 
     def _finish_path(self):
@@ -288,7 +293,13 @@ class GestureHandler:
             self._repeat_distance = 0.0
         self._repeat_distance += distance_in_segment
 
-        # Nothing waiting to be fired.
+        self._fire_pending_repeat()
+
+    def _fire_pending_repeat(self):
+        """Fire due repeats even when the fingertip has stopped moving."""
+        if self._active_gesture is None:
+            return
+        settings = self.config.repeat_settings
         if not self._pending_repeats:
             return
 

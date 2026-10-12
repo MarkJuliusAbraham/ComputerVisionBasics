@@ -17,6 +17,14 @@ class HandTracker:
     """Handles MediaPipe hand landmark detection (async, LIVE_STREAM mode)."""
 
     def __init__(self, model_path=MODEL_PATH, num_hands=1, max_width=None):
+        self.max_width = max_width
+        self._latest = _EMPTY
+        self._last_ts = 0
+        self._latency_lock = threading.Lock()
+        self._submission_times = {}
+        self._latency_total_ms = 0.0
+        self._latency_max_ms = 0.0
+        self._latency_samples = 0
         options = mp.tasks.vision.HandLandmarkerOptions(
             base_options=mp.tasks.BaseOptions(model_asset_path=str(model_path)),
             running_mode=mp.tasks.vision.RunningMode.LIVE_STREAM,
@@ -27,14 +35,6 @@ class HandTracker:
             min_tracking_confidence=0.7,
         )
         self.landmarker = mp.tasks.vision.HandLandmarker.create_from_options(options)
-        self.max_width = max_width
-        self._latest = _EMPTY
-        self._last_ts = 0
-        self._latency_lock = threading.Lock()
-        self._submission_times = {}
-        self._latency_total_ms = 0.0
-        self._latency_max_ms = 0.0
-        self._latency_samples = 0
 
     def _on_result(self, result, output_image, timestamp_ms):
         completed_at = time.perf_counter()

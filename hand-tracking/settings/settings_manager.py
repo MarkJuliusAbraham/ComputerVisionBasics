@@ -16,6 +16,8 @@ def default_finger_thresholds(segment_count=4):
 
 def resize_finger_thresholds(thresholds, segment_count):
     """Resize a split list while retaining existing values where practical."""
+    if segment_count not in FINGER_CATEGORIES_BY_COUNT:
+        raise ValueError("Finger segment count must be between 4 and 6")
     values = sorted(float(value) for value in thresholds)
     if len(values) < 2:
         values = [15.0, 45.0, 75.0]
@@ -62,7 +64,7 @@ class SettingsData:
         defaults = cls()
         try:
             segment_count = int(data.get("finger_segment_count", 0))
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             segment_count = 0
         if segment_count not in FINGER_CATEGORIES_BY_COUNT:
             existing_thresholds = data.get("finger_classification_thresholds")
@@ -101,6 +103,9 @@ class SettingsData:
         else:
             thresholds = resize_finger_thresholds(thresholds, segment_count)
         data["finger_classification_thresholds"] = thresholds
+        for key in ("track_hands", "profile"):
+            if key in data and not isinstance(data[key], bool):
+                data[key] = getattr(defaults, key)
         if data.get("finger_deviation_calculation") not in ("default", "prototype"):
             data["finger_deviation_calculation"] = defaults.finger_deviation_calculation
         return cls(**data)
@@ -180,8 +185,13 @@ class Settings:
         updated = data if isinstance(data, SettingsData) else SettingsData.from_dict(data)
         if not updated.has_valid_finger_thresholds():
             raise ValueError("Finger thresholds must be increasing")
+        previous = self.data
         self.data = updated
-        self.save()
+        try:
+            self.save()
+        except OSError:
+            self.data = previous
+            raise
 
     def save(self):
         directory = os.path.dirname(self.path)

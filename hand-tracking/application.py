@@ -1,7 +1,8 @@
 ﻿import time
 import cv2
+from contextlib import ExitStack
 
-from control_panel.control_window import ControlWindow
+from gui.control_window import ControlWindow
 from frame_profiler import FrameProfiler
 from gesture_path_overlay import GesturePathOverlay
 
@@ -82,9 +83,22 @@ class Application:
         self.gesture_handler.configure(config)
 
     def request_restart(self):
-        self.restart_requested = True
-        self.running = False
-        self.control_window.quit()
+        if not self.running:
+            return
+        # Restart the tracking pipeline in place. Dear PyGui owns a native
+        # viewport, so rebuilding the ControlWindow here creates duplicate
+        # windows. Reopening the active camera and clearing detector state
+        # gives Restart its expected effect while preserving the one UI.
+        self.gesture_handler.configure(self.gesture_handler.config)
+        self.camera.request_switch(self.camera.requested_index)
+        self._camera_ui_state = None
+        self._latest_hand_states = []
+        self._gesture_display_updated = 0.0
+        self.tracking_paused = False
+        self.control_window.set_tracking_paused(False)
+        self.invoker_overlay.spell_stack.clear()
+        self.invoker_overlay.current_image = None
+        self.invoker_overlay.image_expiry = 0
 
     def request_quit(self):
         self.running = False
@@ -108,7 +122,7 @@ class Application:
             self.close()
 
     def _process_frame(self):
-        """Process one frame, then yield to Tk's event loop."""
+        """Process one frame, then yield to the control window's event loop."""
         if not self.running:
             return
 
@@ -130,7 +144,9 @@ class Application:
     def _process_frame_work(self):
         """Run and measure the work for one event-loop frame."""
         with self.frame_profiler.measure("commands.update"):
-            self.gesture_handler.update()
+            self.gesture_handler.update(
+                allow_repeats=self.track_hands and not self.tracking_paused and self._tracking_tab_active
+            )
 
         with self.frame_profiler.measure("camera.status"):
             camera_state = self.camera.status()
@@ -141,15 +157,15 @@ class Application:
         with self.frame_profiler.measure("camera.read_copy"):
             frame = self.camera.read()
         if frame is None:
-            if self.camera.switching or self.camera.cap is None:
-                with self.frame_profiler.measure("opencv.wait_key"):
-                    cv2.waitKey(1)
-                self.control_window.after(10, self._process_frame)
-                return
-            self.request_quit()
+            # A failed device should leave the controls available for choosing
+            # another camera rather than terminating the whole application.
+            with self.frame_profiler.measure("opencv.wait_key"):
+                cv2.waitKey(1)
+            self.control_window.after(10, self._process_frame)
             return
 
-        if self.track_hands and not self.tracking_paused and self._tracking_tab_active:
+        preview_active = self.control_window.tracking_preview_active
+        if self.track_hands and not self.tracking_paused and (self._tracking_tab_active or preview_active):
             with self.frame_profiler.measure("tracker.prepare_submit"):
                 tracking = self.tracker.detect(frame)
             with self.frame_profiler.measure("landmarks.draw"):
@@ -157,7 +173,9 @@ class Application:
             with self.frame_profiler.measure("frame.flip"):
                 cv2.flip(frame, 1, dst=frame)  # in place, no new allocation
             with self.frame_profiler.measure("gestures.process"):
-                self._latest_hand_states = self.process_hands(frame, tracking)
+                self._latest_hand_states = self.process_hands(
+                    frame, tracking, invoke_commands=self._tracking_tab_active
+                )
         else:
             with self.frame_profiler.measure("frame.flip"):
                 cv2.flip(frame, 1, dst=frame)
@@ -186,7 +204,7 @@ class Application:
 
         self.control_window.after(1, self._process_frame)
 
-    def process_hands(self, frame, tracking):
+    def process_hands(self, frame, tracking, invoke_commands=True):
         hand_states = []
         for hand, handedness in zip(tracking.hand_landmarks, tracking.handedness):
             classification = handedness[0]
@@ -198,7 +216,7 @@ class Application:
                 state,
                 hand_name,
                 frame_size=(frame.shape[1], frame.shape[0]),
-            )
+            ) if invoke_commands else None
             hand_states.append({
                 "handedness": hand_name,
                 "state": state,
@@ -208,9 +226,11 @@ class Application:
 
 
     def close(self):
-        # Join any in-flight camera switch before releasing shared resources.
-        self.gesture_handler.close()
-        self.control_window.close()
-        self.camera.release()
-        self.tracker.close()
-        cv2.destroyAllWindows()
+        self.running = False
+        # Run every cleanup even if an earlier resource raises while closing.
+        with ExitStack() as cleanup:
+            cleanup.callback(cv2.destroyAllWindows)
+            cleanup.callback(self.tracker.close)
+            cleanup.callback(self.camera.release)
+            cleanup.callback(self.control_window.close)
+            cleanup.callback(self.gesture_handler.close)
