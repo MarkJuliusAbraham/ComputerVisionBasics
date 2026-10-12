@@ -80,5 +80,11 @@ def apply_theme(root, name, scale=1.0):
         int(BASE_BUTTON_PADDING[1] * scale),
     )
     style = ttk.Style(root)
+    try:
+        combo_font = tkfont.nametofont("SunValleyBodyFont")
+        style.configure("TCombobox", font=combo_font)
+        root.option_add("*TCombobox*Listbox.font", str(combo_font))
+    except tk.TclError:
+        pass
     style.configure("TButton", padding=padding)
     style.configure("Accent.TButton", padding=padding)

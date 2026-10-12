@@ -38,6 +38,7 @@ class Application:
         self.running = True
         self.restart_requested = False
         self.tracking_paused = False
+        self._tracking_tab_active = True
         self._camera_ui_state = None
         self._gesture_display_updated = 0.0
         self._latest_hand_states = []
@@ -50,6 +51,8 @@ class Application:
             camera_index=self.camera.requested_index,
             on_camera_switch=self.camera.request_switch,
             on_toggle_tracking=self.toggle_tracking,
+            on_tracking_tab_active=self.set_tracking_tab_active,
+            on_mapping_saved=self.apply_gesture_config,
         )
 
 
@@ -71,6 +74,10 @@ class Application:
         self.settings.update(data)
         self.apply_settings()
 
+    def apply_gesture_config(self, config):
+        """Apply a validated, saved gesture mapping to the running handler."""
+        self.gesture_handler.configure(config)
+
     def request_restart(self):
         self.restart_requested = True
         self.running = False
@@ -83,6 +90,10 @@ class Application:
     def toggle_tracking(self):
         self.tracking_paused = not self.tracking_paused
         self.control_window.set_tracking_paused(self.tracking_paused)
+
+    def set_tracking_tab_active(self, active):
+        """Suspend hand detection while the Main tab is not visible."""
+        self._tracking_tab_active = active
 
     def run(self):
         self._frames = 0
@@ -113,7 +124,7 @@ class Application:
             self.request_quit()
             return
 
-        if self.track_hands and not self.tracking_paused:
+        if self.track_hands and not self.tracking_paused and self._tracking_tab_active:
             tracking = self.tracker.detect(frame)
             self.drawer.draw(frame, tracking.hand_landmarks)
             cv2.flip(frame, 1, dst=frame)  # in place, no new allocation

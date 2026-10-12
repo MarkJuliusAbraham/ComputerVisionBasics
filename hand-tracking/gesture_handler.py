@@ -6,6 +6,7 @@ from gestures.detector import GestureState
 from gestures.gesture_config import GestureConfig
 from gestures.gesture_matcher import GestureMatcher
 from gestures.gesture_detector import Pinching
+from gestures.profile_manager import GestureProfileManager
 from input.command_executor import CommandExecutor
 from volume_controller import VolumeController
 
@@ -33,7 +34,11 @@ class GestureHandler:
     def __init__(self, invoker_overlay: InvokerOverlay, config=None):
         self.volume = VolumeController()
         self.invoker_overlay = invoker_overlay
-        self.config = config or GestureConfig.load()
+        if config is None:
+            config = GestureConfig.load(
+                GestureProfileManager().active_profile
+            )
+        self.config = config
         self.matcher = GestureMatcher()
         self.definitions_by_id = {
             definition.id: definition for definition in self.config.definitions
@@ -68,6 +73,16 @@ class GestureHandler:
         self._previous_x = None
         self._previous_fingertip_y = None
         self._previous_z = None
+
+    def configure(self, config):
+        """Replace the gesture map and clear any active latch/repeat state."""
+        self.config = config
+        self.definitions_by_id = {
+            definition.id: definition for definition in config.definitions
+        }
+        self._input_locked = False
+        self._reset_active = False
+        self._clear_repeat_state()
 
     def handle(self, state: GestureState):
         # Reset always gets checked first.
@@ -119,7 +134,7 @@ class GestureHandler:
 
         self._latch()
 
-        return definition.id
+        return definition.name
 
     def _clear_repeat_state(self):
         self._active_gesture = None

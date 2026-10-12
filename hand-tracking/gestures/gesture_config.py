@@ -1,4 +1,5 @@
 import json
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -6,7 +7,9 @@ from gestures.finger_classifier import FingerPosition
 from gestures.palm_detector import PalmPosition
 
 
-DEFAULT_GESTURE_CONFIG = Path(__file__).with_name("gesture_definitions.json")
+DEFAULT_GESTURE_PROFILE_DIR = Path(__file__).resolve().parents[1] / "gesture_profiles"
+DEFAULT_GESTURE_CONFIG = DEFAULT_GESTURE_PROFILE_DIR / "invoker_profile.json"
+DEFAULT_GESTURE_TEMPLATE = Path(__file__).with_name("default_gesture_profile.json")
 FINGER_NAMES = {"thumb", "index", "middle", "ring", "pinky"}
 FINGER_POSITIONS = {position.value for position in FingerPosition}
 PALM_POSITIONS = {position.value for position in PalmPosition}
@@ -106,6 +109,7 @@ class CommandSequence:
 @dataclass(frozen=True)
 class GestureDefinition:
     id: str
+    name: str
     match: GestureMatch
     commands: CommandSequence
     repeat_fingers: tuple[str, ...] = ()
@@ -113,6 +117,7 @@ class GestureDefinition:
     def to_dict(self):
         result = {
             "id": self.id,
+            "name": self.name,
             "match": self.match.to_dict(),
             "commands": self.commands.to_dict(),
         }
@@ -137,6 +142,11 @@ class GestureConfig:
         ids = [definition.id for definition in self.definitions]
         if len(set(ids)) != len(ids):
             raise ValueError("Gesture IDs must be unique")
+        if any(
+            not isinstance(definition.name, str) or not definition.name.strip()
+            for definition in self.definitions
+        ):
+            raise ValueError("Gesture names cannot be empty")
         self._validate_no_overlaps(self.definitions)
         target = Path(path)
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -148,6 +158,8 @@ class GestureConfig:
 
     @classmethod
     def load(cls, path=DEFAULT_GESTURE_CONFIG):
+        if Path(path) == DEFAULT_GESTURE_CONFIG and not DEFAULT_GESTURE_CONFIG.exists():
+            ensure_default_gesture_profile()
         try:
             with open(path, encoding="utf-8") as file:
                 raw = json.load(file)
@@ -172,6 +184,9 @@ class GestureConfig:
             if gesture_id in ids:
                 raise ValueError(f"Duplicate gesture id {gesture_id!r}")
             ids.add(gesture_id)
+            name = item.get("name", gesture_id)
+            if not isinstance(name, str) or not name.strip():
+                raise ValueError(f"{location}.name must be a non-empty string")
 
             repeat_fingers = item.get("repeat_fingers", [])
             if (
@@ -185,6 +200,7 @@ class GestureConfig:
 
             definitions.append(GestureDefinition(
                 id=gesture_id,
+                name=name,
                 match=GestureMatch.from_dict(item.get("match"), f"{location}.match"),
                 commands=CommandSequence.from_dict(
                     item.get("commands"), f"{location}.commands"
@@ -198,6 +214,11 @@ class GestureConfig:
 
     @staticmethod
     def _validate_no_overlaps(definitions):
+        for definition in definitions:
+            if definition.match.palm is None and not definition.match.fingers:
+                raise ValueError(
+                    f"Gesture {definition.id!r} must constrain palm or at least one finger"
+                )
         for index, first in enumerate(definitions):
             for second in definitions[index + 1:]:
                 if GestureConfig.matches_can_overlap(first.match, second.match):
@@ -218,3 +239,13 @@ class GestureConfig:
             if not first_allowed.intersection(second_allowed):
                 return False
         return True
+
+
+def ensure_default_gesture_profile(folder=DEFAULT_GESTURE_PROFILE_DIR):
+    """Create the default profile folder and seed it with a usable mapping."""
+    folder = Path(folder)
+    folder.mkdir(parents=True, exist_ok=True)
+    profile = folder / "invoker_profile.json"
+    if not profile.exists() and DEFAULT_GESTURE_TEMPLATE.exists():
+        shutil.copyfile(DEFAULT_GESTURE_TEMPLATE, profile)
+    return profile

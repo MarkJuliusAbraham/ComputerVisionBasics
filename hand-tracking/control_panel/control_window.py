@@ -7,13 +7,14 @@ from control_panel.theme import (
 )
 from control_panel.deviation_bar import DeviationBar
 from control_panel.finger_threshold_control import FingerThresholdControl
+from control_panel.mapping_editor import MappingEditor
 from control_panel.unapplied_changes_dialog import UnappliedChangesDialog
 from gestures.finger_classifier import FingerPosition, FingerState
 from settings.settings_manager import (
     NUMERIC_SETTINGS, Settings, SettingsData, THEMES, UI_SCALES,
 )
 
-BASE_SIZE = (760, 620)  # window size in pixels at 100%
+BASE_SIZE = (860, 720)  # window size in pixels at 100%
 
 class ControlWindow:
     """Control panel with Main and Settings tabs."""
@@ -28,12 +29,15 @@ class ControlWindow:
         camera_index=0,
         on_camera_switch=None,
         on_toggle_tracking=None,
+        on_tracking_tab_active=None,
+        on_mapping_saved=None,
     ):
         self.on_settings_path = on_settings_path
         self.on_apply = on_apply
         self.on_close = on_close
         self.on_camera_switch = on_camera_switch
         self.on_toggle_tracking = on_toggle_tracking
+        self.on_tracking_tab_active = on_tracking_tab_active
         self.camera_index = camera_index
         self._camera_active = False
         self._camera_switching = True
@@ -54,9 +58,16 @@ class ControlWindow:
         self.notebook.pack(fill="both", expand=True)
 
         main_tab = ttk.Frame(self.notebook)
+        self._main_tab = main_tab
         self.settings_tab = ttk.Frame(self.notebook)
+        mapping_tab = ttk.Frame(self.notebook)
         self.notebook.add(main_tab, text="Main")
         self.notebook.add(self.settings_tab, text="Settings")
+        self.notebook.add(mapping_tab, text="Mapping")
+        self.mapping_editor = MappingEditor(
+            mapping_tab, on_saved=on_mapping_saved
+        )
+        self.mapping_editor.pack(fill="both", expand=True)
         settings_tab = self.settings_tab
 
         # Main tab
@@ -330,11 +341,11 @@ class ControlWindow:
         self.show_settings(settings)
         self.status_var.set("Settings file loaded")
 
-        # Watch tab switches so we can guard the Settings tab
+        # Watch tab switches so unapplied edits are not lost.
         self._current_tab = self.notebook.select()
         self.notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
 
-        self.root.protocol("WM_DELETE_WINDOW", on_close)
+        self.root.protocol("WM_DELETE_WINDOW", self._request_close)
 
     def _report_callback_exception(self, exception, value, traceback):
         """Treat IDE shutdown interrupts as a request to close the application."""
@@ -582,11 +593,40 @@ class ControlWindow:
         self._current_tab = new_tab
 
         leaving_settings = old_tab == str(self.settings_tab) and new_tab != old_tab
+        leaving_mapping = old_tab == str(self.mapping_editor.master) and new_tab != old_tab
         if leaving_settings and self.is_dirty():
             if not self._confirm_leave():
                 # Cancel: go back to the Settings tab
                 self._current_tab = old_tab
                 self.notebook.select(old_tab)
+        elif leaving_mapping and self.mapping_editor.is_dirty():
+            if not self._confirm_mapping_leave():
+                self._current_tab = old_tab
+                self.notebook.select(old_tab)
+
+        if self.on_tracking_tab_active:
+            self.on_tracking_tab_active(self.notebook.select() == str(self._main_tab))
+
+    def _confirm_mapping_leave(self):
+        choice = UnappliedChangesDialog(
+            self.root, context="Mapping", action_label="Save"
+        ).show()
+        if choice == "cancel":
+            return False
+        if choice == "save":
+            return self.mapping_editor.save()
+        self.mapping_editor.discard()
+        return True
+
+    def _request_close(self):
+        current_tab = self.notebook.select()
+        if current_tab == str(self.settings_tab) and self.is_dirty():
+            if not self._confirm_leave():
+                return
+        elif current_tab == str(self.mapping_editor.master) and self.mapping_editor.is_dirty():
+            if not self._confirm_mapping_leave():
+                return
+        self.on_close()
 
     def _confirm_leave(self):
         """Ask what to do with pending changes. Returns False if the user cancels."""
