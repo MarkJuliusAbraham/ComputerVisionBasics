@@ -2,6 +2,7 @@
 import cv2
 
 from control_panel.control_window import ControlWindow
+from frame_profiler import FrameProfiler
 
 
 class Application:
@@ -19,8 +20,6 @@ class Application:
         invoker_overlay,
         settings,
     ):
-        self._last_report = None
-        self._frames = None
         self.profile = None
         self.theme = None
         self.track_hands = None
@@ -33,6 +32,7 @@ class Application:
         self.image_overlay = image_overlay
         self.invoker_overlay = invoker_overlay
         self.settings = settings
+        self.frame_profiler = FrameProfiler(enabled=bool(settings.data.profile))
         self.apply_settings()
 
         self.running = True
@@ -61,6 +61,7 @@ class Application:
         self.detector.configure(self.settings.data)
         self.track_hands = self.settings.data.track_hands
         self.profile = self.settings.data.profile
+        self.frame_profiler.enabled = bool(self.profile)
         self.theme = self.settings.data.theme
 
     def load_settings_file(self, path):
@@ -96,8 +97,6 @@ class Application:
         self._tracking_tab_active = active
 
     def run(self):
-        self._frames = 0
-        self._last_report = time.perf_counter()
         try:
             self.control_window.after(0, self._process_frame)
             self.control_window.run()
@@ -111,50 +110,67 @@ class Application:
         if not self.running:
             return
 
-        camera_state = self.camera.status()
+        self.frame_profiler.begin_frame()
+        try:
+            self._process_frame_work()
+        finally:
+            summary = self.frame_profiler.finish_frame()
+            if summary:
+                print(summary)
+
+    def _process_frame_work(self):
+        """Run and measure the work for one event-loop frame."""
+        with self.frame_profiler.measure("commands.update"):
+            self.gesture_handler.update()
+
+        with self.frame_profiler.measure("camera.status"):
+            camera_state = self.camera.status()
         if camera_state != self._camera_ui_state:
-            self.control_window.update_camera_state(*camera_state)
+            with self.frame_profiler.measure("ui.camera_status"):
+                self.control_window.update_camera_state(*camera_state)
             self._camera_ui_state = camera_state
-        frame = self.camera.read()
+        with self.frame_profiler.measure("camera.read_copy"):
+            frame = self.camera.read()
         if frame is None:
             if self.camera.switching or self.camera.cap is None:
-                cv2.waitKey(1)
+                with self.frame_profiler.measure("opencv.wait_key"):
+                    cv2.waitKey(1)
                 self.control_window.after(10, self._process_frame)
                 return
             self.request_quit()
             return
 
         if self.track_hands and not self.tracking_paused and self._tracking_tab_active:
-            tracking = self.tracker.detect(frame)
-            self.drawer.draw(frame, tracking.hand_landmarks)
-            cv2.flip(frame, 1, dst=frame)  # in place, no new allocation
-            self._latest_hand_states = self.process_hands(frame, tracking)
+            with self.frame_profiler.measure("tracker.prepare_submit"):
+                tracking = self.tracker.detect(frame)
+            with self.frame_profiler.measure("landmarks.draw"):
+                self.drawer.draw(frame, tracking.hand_landmarks)
+            with self.frame_profiler.measure("frame.flip"):
+                cv2.flip(frame, 1, dst=frame)  # in place, no new allocation
+            with self.frame_profiler.measure("gestures.process"):
+                self._latest_hand_states = self.process_hands(frame, tracking)
         else:
-            cv2.flip(frame, 1, dst=frame)
+            with self.frame_profiler.measure("frame.flip"):
+                cv2.flip(frame, 1, dst=frame)
             self._latest_hand_states = []
 
         now = time.monotonic()
         if now - self._gesture_display_updated >= 0.1:
-            self.control_window.update_gesture_display(
-                self._latest_hand_states,
-                enabled=self.track_hands,
-                paused=self.tracking_paused,
-            )
+            with self.frame_profiler.measure("ui.gesture_display"):
+                self.control_window.update_gesture_display(
+                    self._latest_hand_states,
+                    enabled=self.track_hands,
+                    paused=self.tracking_paused,
+                )
             self._gesture_display_updated = now
 
         # Once per frame, even when no hands are visible
-        frame = self.invoker_overlay.handleDisplay(frame)
-        cv2.imshow("Hand Tracking", frame)
-        key = cv2.waitKey(1) & 0xFF
-
-        if self.profile:
-            self._frames += 1
-            now = time.perf_counter()
-            if now - self._last_report >= 2.0:
-                mode = "tracking" if self.track_hands else "no tracking"
-                print(f"{self._frames / (now - self._last_report):.1f} fps ({mode})")
-                self._frames = 0
-                self._last_report = now
+        with self.frame_profiler.measure("overlay.compose"):
+            frame = self.invoker_overlay.handleDisplay(frame)
+        with self.frame_profiler.measure("opencv.imshow"):
+            cv2.imshow("Hand Tracking", frame)
+        with self.frame_profiler.measure("opencv.wait_key"):
+            cv2.waitKey(1)
 
         self.control_window.after(1, self._process_frame)
 
@@ -177,6 +193,7 @@ class Application:
 
     def close(self):
         # Join any in-flight camera switch before releasing shared resources.
+        self.gesture_handler.close()
         self.control_window.close()
         self.camera.release()
         self.tracker.close()

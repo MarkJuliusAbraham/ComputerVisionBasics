@@ -76,6 +76,7 @@ class GestureHandler:
 
     def configure(self, config):
         """Replace the gesture map and clear any active latch/repeat state."""
+        self.command_executor.clear()
         self.config = config
         self.definitions_by_id = {
             definition.id: definition for definition in config.definitions
@@ -83,6 +84,13 @@ class GestureHandler:
         self._input_locked = False
         self._reset_active = False
         self._clear_repeat_state()
+
+    def update(self):
+        """Advance delayed command actions from the application event loop."""
+        self.command_executor.update()
+
+    def close(self):
+        self.command_executor.clear()
 
     def handle(self, state: GestureState):
         # Reset always gets checked first.
