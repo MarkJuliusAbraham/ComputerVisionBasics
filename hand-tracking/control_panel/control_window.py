@@ -10,9 +10,10 @@ from control_panel.finger_threshold_control import FingerThresholdControl
 from control_panel.main_tab import MainTab
 from control_panel.mapping_editor import MappingEditor
 from control_panel.unapplied_changes_dialog import UnappliedChangesDialog
-from gestures.finger_classifier import FingerPosition, FingerState
+from gestures.finger_classifier import FingerState, finger_categories
 from settings.settings_manager import (
     NUMERIC_SETTINGS, Settings, SettingsData, THEMES, UI_SCALES,
+    resize_finger_thresholds,
 )
 
 BASE_SIZE = (860, 720)  # window size in pixels at 100%
@@ -37,7 +38,7 @@ class ControlWindow:
         self.on_close = on_close
         self.on_tracking_tab_active = on_tracking_tab_active
         self._baseline = SettingsData()
-        self._max_deviation = settings.data.finger_closed_threshold
+        self._max_deviation = max(settings.data.finger_classification_thresholds or [75.0])
         self._test_deviation_visible = False
 
         self.root = tk.Tk()
@@ -99,7 +100,8 @@ class ControlWindow:
         )
         self.root.bind_all("<MouseWheel>", self._scroll_mapping)
         self.mapping_editor = MappingEditor(
-            mapping_content, on_saved=on_mapping_saved
+            mapping_content, on_saved=on_mapping_saved,
+            segment_count=settings.data.finger_segment_count,
         )
         self.mapping_editor.pack(fill="x")
         settings_tab = self.settings_tab
@@ -137,9 +139,16 @@ class ControlWindow:
             "Tracking": ("Hand tracking behavior and diagnostics", [
                 ("track_hands", "Track hands", None),
                 ("profile", "Print FPS to console", None),
-                ("finger_straight_threshold", "Straight finger threshold (°)", "number"),
-                ("finger_curled_threshold", "Curled finger threshold (°)", "number"),
-                ("finger_closed_threshold", "Closed finger threshold (°)", "number"),
+                (
+                    "finger_segment_count",
+                    "Number of deviation segments",
+                    ("4", "5", "6"),
+                ),
+                (
+                    "finger_deviation_calculation",
+                    "Deviation calculation",
+                    ("default", "prototype"),
+                ),
                 ("pinch_distance_threshold", "Pinch distance threshold", "number"),
                 ("pinch_release_factor", "Pinch release factor", "number"),
             ]),
@@ -149,11 +158,10 @@ class ControlWindow:
             ]),
         }
         self.topic_descriptions = {}
-        finger_threshold_keys = (
-            "finger_straight_threshold",
-            "finger_curled_threshold",
-            "finger_closed_threshold",
-        )
+        self.threshold_vars = [
+            tk.DoubleVar(value=value)
+            for value in settings.data.finger_classification_thresholds
+        ]
         for topic, (description, items) in topics.items():
             page = ttk.Frame(self.settings_content)
             self.topic_pages[topic] = page
@@ -161,9 +169,6 @@ class ControlWindow:
             group = ttk.LabelFrame(page, text=topic, padding=(12, 8, 12, 10))
             group.pack(fill="x", anchor="n")
             for key, label, options in items:
-                if key in finger_threshold_keys:
-                    self.vars[key] = tk.DoubleVar()
-                    continue
                 row = ttk.Frame(group)
                 row.pack(fill="x", pady=8)
                 if options is None:
@@ -190,10 +195,16 @@ class ControlWindow:
                         state="readonly", width=14,
                     )
                     combo.pack(anchor="w")
-                    combo.bind(
-                        "<<ComboboxSelected>>",
-                        lambda e: self._refresh_apply_state(),
-                    )
+                    if key == "finger_segment_count":
+                        combo.bind(
+                            "<<ComboboxSelected>>",
+                            lambda _event: self._on_segment_count_change(),
+                        )
+                    else:
+                        combo.bind(
+                            "<<ComboboxSelected>>",
+                            lambda _event: self._refresh_apply_state(),
+                        )
                 self.vars[key] = var
 
             if topic == "Tracking":
@@ -202,10 +213,9 @@ class ControlWindow:
                 ).pack(anchor="w", pady=(12, 2))
                 self.finger_threshold_control = FingerThresholdControl(
                     group,
-                    self.vars["finger_straight_threshold"],
-                    self.vars["finger_curled_threshold"],
-                    self.vars["finger_closed_threshold"],
+                    self.threshold_vars,
                     on_change=self._on_finger_threshold_change,
+                    segment_count=settings.data.finger_segment_count,
                 )
                 self.finger_threshold_control.pack(fill="x", pady=(0, 6))
                 self.test_deviation_button = ttk.Button(
@@ -311,7 +321,39 @@ class ControlWindow:
 
     def get_values(self):
         """Current widget values, as a dict of key -> value."""
-        return SettingsData.from_dict({key: var.get() for key, var in self.vars.items()})
+        values = {key: var.get() for key, var in self.vars.items()}
+        values["finger_classification_thresholds"] = [
+            variable.get() for variable in self.threshold_vars
+        ]
+        return SettingsData.from_dict(values)
+
+    def _replace_threshold_control(self, segment_count, thresholds):
+        parent = self.finger_threshold_control.master
+        self.finger_threshold_control.destroy()
+        self.threshold_vars = [tk.DoubleVar(value=value) for value in thresholds]
+        self.finger_threshold_control = FingerThresholdControl(
+            parent,
+            self.threshold_vars,
+            on_change=self._on_finger_threshold_change,
+            segment_count=segment_count,
+        )
+        self.finger_threshold_control.pack(
+            fill="x", pady=(0, 6), before=self.test_deviation_button
+        )
+        if hasattr(self, "_theme_name"):
+            self.finger_threshold_control.set_theme(self._theme_name)
+
+    def _on_segment_count_change(self):
+        try:
+            segment_count = int(self.vars["finger_segment_count"].get())
+        except (TypeError, ValueError):
+            return
+        thresholds = resize_finger_thresholds(
+            [variable.get() for variable in self.threshold_vars], segment_count
+        )
+        self._replace_threshold_control(segment_count, thresholds)
+        self.mapping_editor.set_segment_count(segment_count)
+        self._on_finger_threshold_change()
 
     def is_dirty(self):
         return self.get_values() != self._baseline
@@ -342,27 +384,16 @@ class ControlWindow:
 
     def _render_test_deviation(self):
         values = self.get_values()
-        thresholds = (
-            values.finger_straight_threshold,
-            values.finger_curled_threshold,
-            values.finger_closed_threshold,
-        )
         fingers = {}
         for name, finger in (self.main_tab.preview_fingers or {}).items():
             deviation = finger.deviation
-            if deviation <= thresholds[0]:
-                position = FingerPosition.STRAIGHT
-            elif deviation >= thresholds[2]:
-                position = FingerPosition.CLOSED
-            elif deviation >= thresholds[1]:
-                position = FingerPosition.CURLED
-            else:
-                position = FingerPosition.PARTIAL
+            position = values.classify_finger_deviation(deviation)
             fingers[name] = FingerState(deviation, position, finger.tip)
 
         self.test_deviation_status.set(self.main_tab.preview_status)
         self.test_deviation_bar.set_data(
-            fingers or None, self._theme_name, values.finger_closed_threshold
+            fingers or None, self._theme_name,
+            max(values.finger_classification_thresholds or [75.0]),
         )
 
     def show_topic(self, topic):
@@ -396,11 +427,26 @@ class ControlWindow:
     def show_settings(self, settings):
         """Refresh the path field and all widgets from a Settings object."""
         self.path_var.set(settings.path)
-        self._max_deviation = settings.data.finger_closed_threshold
+        self._max_deviation = max(settings.data.finger_classification_thresholds or [75.0])
         self.tracking_error.set("")
         for key, var in self.vars.items():
             value = getattr(settings.data, key)
             var.set(bool(value) if isinstance(var, tk.BooleanVar) else value)
+        if len(self.threshold_vars) != settings.data.finger_segment_count - 1:
+            self._replace_threshold_control(
+                settings.data.finger_segment_count,
+                settings.data.finger_classification_thresholds,
+            )
+        else:
+            for variable, value in zip(
+                self.threshold_vars, settings.data.finger_classification_thresholds
+            ):
+                variable.set(value)
+            self.finger_threshold_control.categories = finger_categories(
+                settings.data.finger_segment_count
+            )
+            self.finger_threshold_control.redraw()
+        self.mapping_editor.set_segment_count(settings.data.finger_segment_count)
         self._apply_display(settings.data.theme, settings.data.ui_scale)
         self._style_nav()
         self._baseline = self.get_values()  # whatever is shown now is the baseline
@@ -410,14 +456,15 @@ class ControlWindow:
         values = self.get_values()
         if not values.has_valid_finger_thresholds():
             self.tracking_error.set(
-                "Thresholds must increase: straight < curled < closed."
+                "Thresholds must be strictly increasing."
             )
             self.show_topic("Tracking")
             return
         self.tracking_error.set("")
         if self.on_apply:
             self.on_apply(values)
-        self._max_deviation = values.finger_closed_threshold
+        self.mapping_editor.set_segment_count(values.finger_segment_count)
+        self._max_deviation = max(values.finger_classification_thresholds or [75.0])
         self._apply_display(values.theme, values.ui_scale)
         self._style_nav()
         self._baseline = values
@@ -440,8 +487,25 @@ class ControlWindow:
         """Revert the widgets to the baseline."""
         for key, var in self.vars.items():
             var.set(getattr(self._baseline, key))
+        if len(self.threshold_vars) != self._baseline.finger_segment_count - 1:
+            self._replace_threshold_control(
+                self._baseline.finger_segment_count,
+                self._baseline.finger_classification_thresholds,
+            )
+        else:
+            for variable, value in zip(
+                self.threshold_vars, self._baseline.finger_classification_thresholds
+            ):
+                variable.set(value)
+            self.finger_threshold_control.categories = finger_categories(
+                self._baseline.finger_segment_count
+            )
+            self.finger_threshold_control.redraw()
+        self.mapping_editor.set_segment_count(self._baseline.finger_segment_count)
         self.tracking_error.set("")
-        self._max_deviation = self._baseline.finger_closed_threshold
+        self._max_deviation = max(
+            self._baseline.finger_classification_thresholds or [75.0]
+        )
         self.main_tab.set_display(self._theme_name, self._max_deviation)
         self._refresh_apply_state()
 

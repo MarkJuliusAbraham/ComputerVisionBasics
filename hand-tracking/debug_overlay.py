@@ -1,6 +1,6 @@
 ﻿import cv2
 from gestures.gesture_detector import Pinching
-from gestures.gesture_detector import FingerPosition
+from gestures.finger_classifier import FingerPosition
 from volume_controller import VolumeController
 
 

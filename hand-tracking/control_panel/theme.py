@@ -52,6 +52,10 @@ def resolve_scale(root, value):
 def gesture_classification_color(theme_name, classification):
     """Return the active theme's semantic color for a finger classification."""
     palette = _GESTURE_COLORS.get(theme_name, _GESTURE_COLORS["Light"])
+    classification = {
+        "very_curled": "curled",
+        "nearly_closed": "closed",
+    }.get(classification, classification)
     return palette.get(classification, palette["straight"])
 
 

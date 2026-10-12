@@ -6,7 +6,7 @@ import tkinter as tk
 from tkinter import ttk
 from uuid import uuid4
 
-from gestures.finger_classifier import FingerPosition
+from gestures.finger_classifier import finger_categories
 from gestures.gesture_config import (
     CommandSequence,
     CommandStep,
@@ -25,24 +25,34 @@ PALM_OPTIONS = {
     "Facing camera": "facing_camera",
     "Not facing camera": "not_facing_camera",
 }
-FINGER_OPTIONS = tuple(position.value for position in FingerPosition)
+ALL_FINGER_CATEGORIES = finger_categories(6)
+ALL_FINGER_OPTIONS = tuple(category.value for category in ALL_FINGER_CATEGORIES)
 FINGER_NAMES = ("thumb", "index", "middle", "ring", "pinky")
-STRAIGHTNESS_OPTIONS = {
-    "Any position": None,
-    "Straight": {"straight"},
-    "Straight or Partial": {"straight", "partial"},
-    "Closed": {"closed"},
-    "Closed or Curled": {"closed", "curled"},
-    "Not Straight": {"partial", "curled", "closed"},
-    "Not Closed": {"straight", "partial", "curled"},
-}
+
+
+def _build_straightness_options(categories):
+    positions = [category.value for category in categories]
+    first_two_end = positions.index("partial") if "partial" in positions else 1
+    curled_start = positions.index("curled") if "curled" in positions else max(len(positions) - 2, 0)
+    return {
+        "Any position": None,
+        "Straight": {"straight"},
+        "Straight or Partial": set(positions[:first_two_end + 1]),
+        "Closed": {"closed"},
+        "Closed or Curled": set(positions[curled_start:]),
+        "Not Straight": set(positions[1:]),
+        "Not Closed": set(positions[:-1]),
+    }
 
 
 class MappingEditor(ttk.Frame):
     """Editor for saved gesture criteria and their command sequences."""
 
-    def __init__(self, master, on_saved=None, config_path=None):
+    def __init__(self, master, on_saved=None, config_path=None, segment_count=4):
         super().__init__(master, padding=(24, 20))
+        self.categories = finger_categories(segment_count)
+        self.finger_options = tuple(category.value for category in self.categories)
+        self.straightness_options = _build_straightness_options(self.categories)
         self.profile_manager = GestureProfileManager()
         if config_path is not None:
             self.profile_manager.set_location(config_path)
@@ -154,26 +164,33 @@ class MappingEditor(ttk.Frame):
             row=0, column=1, sticky="w", pady=(0, 4)
         )
         self.straightness_vars = {}
+        self.straightness_combos = {}
         for row, name in enumerate(FINGER_NAMES, start=1):
             ttk.Label(self.straightness_frame, text=name.title(), width=16, anchor="w").grid(
                 row=row, column=0, sticky="w", pady=4
             )
             variable = tk.StringVar(value="Any position")
-            ttk.Combobox(
+            combo = ttk.Combobox(
                 self.straightness_frame, textvariable=variable,
-                values=tuple(STRAIGHTNESS_OPTIONS), state="readonly", width=24,
-            ).grid(row=row, column=1, sticky="w", pady=4)
+                values=tuple(self.straightness_options), state="readonly", width=24,
+            )
+            combo.grid(row=row, column=1, sticky="w", pady=4)
             self.straightness_vars[name] = variable
+            self.straightness_combos[name] = combo
 
         self.classification_frame = ttk.Frame(self.finger_options_area)
         finger_grid = self.classification_frame
         ttk.Label(finger_grid, text="Finger", width=12, anchor="w").grid(
             row=0, column=0, sticky="w", padx=(0, 4)
         )
-        for column, position in enumerate(FINGER_OPTIONS, start=1):
-            ttk.Label(
-                finger_grid, text=position.title(), anchor="center"
-            ).grid(row=0, column=column, sticky="ew", padx=3)
+        self.category_column_widgets = {}
+        for column, category in enumerate(ALL_FINGER_CATEGORIES, start=1):
+            position = category.value
+            header = ttk.Label(
+                finger_grid, text=category.label, anchor="center"
+            )
+            header.grid(row=0, column=column, sticky="ew", padx=3)
+            self.category_column_widgets[position] = [header]
             finger_grid.columnconfigure(column, weight=1, uniform="position")
 
         self.finger_vars = {}
@@ -182,12 +199,16 @@ class MappingEditor(ttk.Frame):
                 row=row, column=0, sticky="w", padx=(0, 6), pady=5
             )
             self.finger_vars[name] = {}
-            for column, position in enumerate(FINGER_OPTIONS, start=1):
+            for column, position in enumerate(ALL_FINGER_OPTIONS, start=1):
                 variable = tk.BooleanVar()
-                ttk.Checkbutton(finger_grid, variable=variable).grid(
+                checkbox = ttk.Checkbutton(finger_grid, variable=variable)
+                checkbox.grid(
                     row=row, column=column, padx=4, pady=5
                 )
+                self.category_column_widgets[position].append(checkbox)
                 self.finger_vars[name][position] = variable
+
+        self._update_category_widgets()
 
         self.straightness_frame.grid(row=0, column=0, sticky="ew")
         self.classification_frame.grid(row=0, column=0, sticky="ew")
@@ -296,6 +317,32 @@ class MappingEditor(ttk.Frame):
             self.selected_id.set(self._label_for_id(first))
             self._load_draft(self._drafts[first])
         self._refresh_save_state()
+
+    def set_segment_count(self, segment_count):
+        """Refresh available profile criteria to match the active classifier."""
+        self._capture_draft()
+        self.categories = finger_categories(segment_count)
+        self.finger_options = tuple(category.value for category in self.categories)
+        self.straightness_options = _build_straightness_options(self.categories)
+        for combo in self.straightness_combos.values():
+            combo.configure(values=tuple(self.straightness_options))
+        self._update_category_widgets()
+        if self._shown_id is not None:
+            self._load_draft(self._drafts[self._shown_id])
+
+    def _update_category_widgets(self):
+        active = set(self.finger_options)
+        for column, (position, widgets) in enumerate(
+            self.category_column_widgets.items(), start=1
+        ):
+            self.classification_frame.columnconfigure(
+                column, weight=1 if position in active else 0
+            )
+            for widget in widgets:
+                if position in active:
+                    widget.grid()
+                else:
+                    widget.grid_remove()
 
     def _label_for_id(self, gesture_id):
         if hasattr(self, "_labels_to_ids"):
@@ -408,7 +455,7 @@ class MappingEditor(ttk.Frame):
                 variable.set(position in selected)
             label = next(
                 (
-                    option for option, positions in STRAIGHTNESS_OPTIONS.items()
+                    option for option, positions in self.straightness_options.items()
                     if (not selected if positions is None else selected == positions)
                 ),
                 "Custom classifications",
@@ -438,7 +485,7 @@ class MappingEditor(ttk.Frame):
             if label == "Custom classifications":
                 result[name] = set(current.get(name, ()))
             else:
-                positions = STRAIGHTNESS_OPTIONS[label]
+                positions = self.straightness_options[label]
                 result[name] = set() if positions is None else set(positions)
         return result
 
@@ -471,7 +518,7 @@ class MappingEditor(ttk.Frame):
                 variable.set(position in selected)
             label = next(
                 (
-                    option for option, positions in STRAIGHTNESS_OPTIONS.items()
+                    option for option, positions in self.straightness_options.items()
                     if (not selected if positions is None else selected == positions)
                 ),
                 "Custom classifications",
@@ -501,7 +548,7 @@ class MappingEditor(ttk.Frame):
         existing = [definition.match for definition in current_definitions]
         new_match = None
         for palm in (None, "facing_camera", "not_facing_camera"):
-            for positions in product(FINGER_OPTIONS, repeat=len(FINGER_NAMES)):
+            for positions in product(self.finger_options, repeat=len(FINGER_NAMES)):
                 match = GestureMatch(
                     palm=palm,
                     fingers={finger: frozenset((position,))

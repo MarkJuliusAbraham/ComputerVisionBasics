@@ -1,6 +1,6 @@
 ﻿from dataclasses import dataclass
 
-from .finger_classifier import FingerPosition, FingerState
+from .finger_classifier import FingerState
 from .geometry import distance
 
 
@@ -38,10 +38,10 @@ class GestureDetector:
 
         is_pinching = (
             distance_between_fingers < threshold
-            and fingers["index"].position != FingerPosition.CURLED
-            and fingers["middle"].position == FingerPosition.CURLED
-            and fingers["ring"].position == FingerPosition.CURLED
-            and fingers["pinky"].position == FingerPosition.CURLED
+            and fingers["index"].position.semantic_class != "curled"
+            and fingers["middle"].position.semantic_class == "curled"
+            and fingers["ring"].position.semantic_class == "curled"
+            and fingers["pinky"].position.semantic_class == "curled"
         )
 
         if not is_pinching:

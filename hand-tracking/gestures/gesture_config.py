@@ -3,7 +3,7 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from gestures.finger_classifier import FingerPosition
+from gestures.finger_classifier import FINGER_POSITIONS
 from gestures.palm_detector import PalmPosition
 
 
@@ -11,7 +11,6 @@ DEFAULT_GESTURE_PROFILE_DIR = Path(__file__).resolve().parents[1] / "gesture_pro
 DEFAULT_GESTURE_CONFIG = DEFAULT_GESTURE_PROFILE_DIR / "invoker_profile.json"
 DEFAULT_GESTURE_TEMPLATE = Path(__file__).with_name("default_gesture_profile.json")
 FINGER_NAMES = {"thumb", "index", "middle", "ring", "pinky"}
-FINGER_POSITIONS = {position.value for position in FingerPosition}
 PALM_POSITIONS = {position.value for position in PalmPosition}
 
 

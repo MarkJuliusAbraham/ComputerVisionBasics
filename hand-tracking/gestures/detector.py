@@ -26,9 +26,9 @@ class Detector:
 
     def configure(self, settings):
         self._finger_classifier = FingerClassifier(
-            settings.finger_straight_threshold,
-            settings.finger_curled_threshold,
-            settings.finger_closed_threshold,
+            settings.finger_classification_thresholds,
+            settings.finger_deviation_calculation,
+            settings.finger_segment_count,
         )
         self._gesture_detector = GestureDetector(
             settings.pinch_distance_threshold,

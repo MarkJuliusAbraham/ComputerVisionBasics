@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from control_panel.theme import gesture_bar_background, gesture_classification_color
+from gestures.finger_classifier import finger_categories
 
 
 class FingerThresholdControl(ttk.Frame):
@@ -11,9 +12,10 @@ class FingerThresholdControl(ttk.Frame):
     HANDLE_RADIUS = 6
     PADDING = 14
 
-    def __init__(self, master, straight_var, curled_var, closed_var, on_change=None):
+    def __init__(self, master, threshold_vars, on_change=None, segment_count=4):
         super().__init__(master)
-        self.variables = (straight_var, curled_var, closed_var)
+        self.variables = tuple(threshold_vars)
+        self.categories = finger_categories(segment_count)
         self.on_change = on_change
         self.theme_name = "Light"
         self._dragging = None
@@ -74,8 +76,8 @@ class FingerThresholdControl(ttk.Frame):
         center_y = 43
         boundaries = [left, *markers, right]
         colors = [
-            gesture_classification_color(self.theme_name, name)
-            for name in ("straight", "partial", "curled", "closed")
+            gesture_classification_color(self.theme_name, category.value)
+            for category in self.categories
         ]
         for start, end, color in zip(boundaries, boundaries[1:], colors):
             self.canvas.create_rectangle(
@@ -123,7 +125,7 @@ class FingerThresholdControl(ttk.Frame):
                 text=value_labels[index], fill=foreground, anchor="n",
             )
 
-        labels = ("Straight", "Partial", "Curled", "Closed")
+        labels = tuple(category.label for category in self.categories)
         for start, end, label, color in zip(
             boundaries, boundaries[1:], labels, colors
         ):
@@ -138,7 +140,9 @@ class FingerThresholdControl(ttk.Frame):
     def _start_drag(self, event):
         _left, _right, markers = self._positions()
         if markers:
-            self._dragging = min(range(3), key=lambda index: abs(markers[index] - event.x))
+            self._dragging = min(
+                range(len(markers)), key=lambda index: abs(markers[index] - event.x)
+            )
             self._drag(event)
 
     def _drag(self, event):
@@ -149,7 +153,10 @@ class FingerThresholdControl(ttk.Frame):
         value = round((position - left) / (right - left) * self.MAX_VALUE)
         index = self._dragging
         lower = int(float(self.variables[index - 1].get())) + 1 if index else 0
-        upper = int(float(self.variables[index + 1].get())) - 1 if index < 2 else self.MAX_VALUE
+        upper = (
+            int(float(self.variables[index + 1].get())) - 1
+            if index < len(self.variables) - 1 else self.MAX_VALUE
+        )
         self.variables[index].set(min(max(value, lower), upper))
         if self.on_change:
             self.on_change()

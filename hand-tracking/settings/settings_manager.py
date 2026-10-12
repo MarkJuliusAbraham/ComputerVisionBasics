@@ -1,6 +1,37 @@
 import json
 import os
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
+
+from gestures.finger_classifier import (
+    FINGER_CATEGORIES_BY_COUNT,
+    FingerClassifier,
+    finger_categories,
+)
+
+
+def default_finger_thresholds(segment_count=4):
+    """Keep the original four bands and subdivide the higher-bend ranges."""
+    return resize_finger_thresholds([15.0, 45.0, 75.0], segment_count)
+
+
+def resize_finger_thresholds(thresholds, segment_count):
+    """Resize a split list while retaining existing values where practical."""
+    values = sorted(float(value) for value in thresholds)
+    if len(values) < 2:
+        values = [15.0, 45.0, 75.0]
+    target_count = segment_count - 1
+    while len(values) < target_count:
+        insert_before_closed = len(values) - 1
+        lower = values[insert_before_closed - 1]
+        upper = values[insert_before_closed]
+        values.insert(insert_before_closed, (lower + upper) / 2)
+    while len(values) > target_count:
+        if target_count == 0:
+            return []
+        # Added bands are inserted immediately before the Closed band, so
+        # remove those split points in reverse order when reducing the count.
+        values.pop(-2)
+    return values
 
 DEFAULT_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "settings.json"
@@ -9,9 +40,6 @@ DEFAULT_PATH = os.path.join(
 THEMES = ("Light", "Dark")
 UI_SCALES = ("Auto", "100%", "125%", "150%", "175%", "200%")
 NUMERIC_SETTINGS = {
-    "finger_straight_threshold": (0.0, 120.0, 1.0),
-    "finger_curled_threshold": (0.0, 120.0, 1.0),
-    "finger_closed_threshold": (0.0, 120.0, 1.0),
     "pinch_distance_threshold": (0.01, 0.20, 0.01),
     "pinch_release_factor": (1.0, 2.0, 0.05),
 }
@@ -25,9 +53,11 @@ class SettingsData:
     profile: bool = True
     theme: str = "Light"
     ui_scale: str = "Auto"
-    finger_straight_threshold: float = 15.0
-    finger_curled_threshold: float = 45.0
-    finger_closed_threshold: float = 75.0
+    finger_segment_count: int = 4
+    finger_classification_thresholds: list[float] = field(
+        default_factory=lambda: default_finger_thresholds(4)
+    )
+    finger_deviation_calculation: str = "default"
     pinch_distance_threshold: float = 0.05
     pinch_release_factor: float = 1.1
 
@@ -39,6 +69,49 @@ class SettingsData:
         fields = cls.__dataclass_fields__
         data = {key: value for key, value in values.items() if key in fields}
         defaults = cls()
+        try:
+            segment_count = int(data.get("finger_segment_count", 0))
+        except (TypeError, ValueError):
+            segment_count = 0
+        if segment_count not in FINGER_CATEGORIES_BY_COUNT:
+            existing_thresholds = data.get("finger_classification_thresholds")
+            if isinstance(existing_thresholds, list):
+                inferred_count = len(existing_thresholds) + 1
+            else:
+                inferred_count = 4
+            segment_count = inferred_count if inferred_count in FINGER_CATEGORIES_BY_COUNT else 4
+        data["finger_segment_count"] = segment_count
+        # Migrate settings files written before thresholds became an ordered
+        # list. The legacy fields are ignored after this one-time conversion.
+        if "finger_classification_thresholds" not in data:
+            legacy_keys = (
+                "finger_straight_threshold",
+                "finger_curled_threshold",
+                "finger_closed_threshold",
+            )
+            if any(key in values for key in legacy_keys):
+                data["finger_classification_thresholds"] = [
+                    values.get("finger_straight_threshold", 15.0),
+                    values.get("finger_curled_threshold", 45.0),
+                    values.get("finger_closed_threshold", 75.0),
+                ]
+            else:
+                data["finger_classification_thresholds"] = default_finger_thresholds(
+                    segment_count
+                )
+        try:
+            thresholds = [float(value) for value in data["finger_classification_thresholds"]]
+        except (TypeError, ValueError):
+            thresholds = default_finger_thresholds(segment_count)
+        if any(not 0.0 <= value <= 120.0 for value in thresholds) or any(
+            left >= right for left, right in zip(thresholds, thresholds[1:])
+        ):
+            thresholds = default_finger_thresholds(segment_count)
+        else:
+            thresholds = resize_finger_thresholds(thresholds, segment_count)
+        data["finger_classification_thresholds"] = thresholds
+        if data.get("finger_deviation_calculation") not in ("default", "prototype"):
+            data["finger_deviation_calculation"] = defaults.finger_deviation_calculation
         for key, (minimum, maximum, _) in NUMERIC_SETTINGS.items():
             try:
                 value = float(data.get(key, getattr(defaults, key)))
@@ -50,10 +123,19 @@ class SettingsData:
         return cls(**data)
 
     def has_valid_finger_thresholds(self):
+        thresholds = self.finger_classification_thresholds
         return (
-            self.finger_straight_threshold
-            < self.finger_curled_threshold
-            < self.finger_closed_threshold
+            self.finger_segment_count in FINGER_CATEGORIES_BY_COUNT
+            and len(thresholds) == self.finger_segment_count - 1
+            and all(0.0 <= value <= 120.0 for value in thresholds)
+            and all(left < right for left, right in zip(thresholds, thresholds[1:]))
+        )
+
+    def classify_finger_deviation(self, deviation):
+        return FingerClassifier.classify_deviation(
+            deviation,
+            self.finger_classification_thresholds,
+            finger_categories(self.finger_segment_count),
         )
 
 
@@ -92,17 +174,14 @@ class Settings:
             print(f"Could not read {self.path} ({e}); using defaults")
             return
         if isinstance(loaded, dict):
-            self.data = SettingsData.from_dict({**self.data.to_dict(), **loaded})
+            self.data = SettingsData.from_dict(loaded)
         for key, allowed in CHOICES.items():
             if getattr(self.data, key) not in allowed:
                 setattr(self.data, key, getattr(DEFAULTS, key))
         if not self.data.has_valid_finger_thresholds():
-            for key in (
-                "finger_straight_threshold",
-                "finger_curled_threshold",
-                "finger_closed_threshold",
-            ):
-                setattr(self.data, key, getattr(DEFAULTS, key))
+            self.data.finger_classification_thresholds = (
+                default_finger_thresholds(self.data.finger_segment_count)
+            )
 
     def get(self, key):
         return getattr(self.data, key, None)
@@ -117,7 +196,7 @@ class Settings:
     def update(self, data):
         updated = data if isinstance(data, SettingsData) else SettingsData.from_dict(data)
         if not updated.has_valid_finger_thresholds():
-            raise ValueError("Finger thresholds must increase from straight to closed")
+            raise ValueError("Finger thresholds must be increasing")
         self.data = updated
         self.save()
 

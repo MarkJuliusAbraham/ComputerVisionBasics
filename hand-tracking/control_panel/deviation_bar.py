@@ -5,6 +5,7 @@ from control_panel.theme import (
     gesture_bar_background,
     gesture_classification_color,
 )
+from gestures.finger_classifier import FINGER_POSITIONS
 
 
 class DeviationBar(ttk.Frame):
@@ -69,7 +70,7 @@ class DeviationBar(ttk.Frame):
             classification = text[-1] if len(text) > 1 else None
             color = (
                 gesture_classification_color(theme_name, classification)
-                if classification in ("straight", "partial", "curled", "closed")
+                if classification in FINGER_POSITIONS
                 else ttk.Style(self).lookup("TLabel", "foreground")
             )
             record["label"].configure(foreground=color)
@@ -96,7 +97,7 @@ class DeviationBar(ttk.Frame):
                 classification = finger.position.value
                 color = gesture_classification_color(self.theme_name, classification)
                 record["details"].set(
-                    f"{finger.deviation:.1f}° {classification}"
+                    f"{finger.deviation:.1f}° {finger.position.label.lower()}"
                 )
                 record["label"].configure(foreground=color)
                 record["ratio"] = min(
