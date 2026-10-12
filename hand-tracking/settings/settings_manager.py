@@ -39,12 +39,6 @@ DEFAULT_PATH = os.path.join(
 
 THEMES = ("Light", "Dark")
 UI_SCALES = ("Auto", "100%", "125%", "150%", "175%", "200%")
-NUMERIC_SETTINGS = {
-    "pinch_distance_threshold": (0.01, 0.20, 0.01),
-    "pinch_release_factor": (1.0, 2.0, 0.05),
-}
-
-
 @dataclass
 class SettingsData:
     """Portable values that configure the application."""
@@ -58,9 +52,6 @@ class SettingsData:
         default_factory=lambda: default_finger_thresholds(4)
     )
     finger_deviation_calculation: str = "default"
-    pinch_distance_threshold: float = 0.05
-    pinch_release_factor: float = 1.1
-
     def to_dict(self):
         return asdict(self)
 
@@ -112,14 +103,6 @@ class SettingsData:
         data["finger_classification_thresholds"] = thresholds
         if data.get("finger_deviation_calculation") not in ("default", "prototype"):
             data["finger_deviation_calculation"] = defaults.finger_deviation_calculation
-        for key, (minimum, maximum, _) in NUMERIC_SETTINGS.items():
-            try:
-                value = float(data.get(key, getattr(defaults, key)))
-            except (TypeError, ValueError):
-                value = getattr(defaults, key)
-            if not minimum <= value <= maximum:
-                value = getattr(defaults, key)
-            data[key] = value
         return cls(**data)
 
     def has_valid_finger_thresholds(self):

@@ -5,10 +5,8 @@ from custom_overlay.invoker_overlay import InvokerOverlay
 from gestures.detector import GestureState
 from gestures.gesture_config import GestureConfig
 from gestures.gesture_matcher import GestureMatcher
-from gestures.gesture_detector import Pinching
 from gestures.profile_manager import GestureProfileManager
 from input.command_executor import CommandExecutor
-from volume_controller import VolumeController
 
 
 class GestureHandler:
@@ -16,7 +14,6 @@ class GestureHandler:
     MAX_PATH_POINTS = 2048
 
     def __init__(self, invoker_overlay: InvokerOverlay, config=None):
-        self.volume = VolumeController()
         self.invoker_overlay = invoker_overlay
         if config is None:
             config = GestureConfig.load(
@@ -30,9 +27,6 @@ class GestureHandler:
         self.command_executor = CommandExecutor(
             on_command=self.invoker_overlay.addCommand
         )
-
-        self._pinching = False
-        self._previous_y = 0.0
 
         self._input_locked = False
 
@@ -318,12 +312,3 @@ class GestureHandler:
 
     def _latch(self):
         self._input_locked = True
-
-    def _handle_pinching(self, gesture: Pinching):
-        delta = self._previous_y - gesture.current_pos[1]
-
-        sensitivity = 8.25
-
-        self.volume.level += delta * sensitivity
-
-        self._previous_y = gesture.current_pos[1]

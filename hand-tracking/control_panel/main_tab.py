@@ -99,7 +99,6 @@ class MainTab(ttk.Frame):
         values = {
             "palm": tk.StringVar(value="—"),
             "gesture": tk.StringVar(value="—"),
-            "pinch": tk.StringVar(value="—\n—\n—"),
             "deviation_bar": None,
         }
         ttk.Label(panel, text="Palm").grid(row=0, column=0, sticky="w")
@@ -110,20 +109,15 @@ class MainTab(ttk.Frame):
         ttk.Label(panel, textvariable=values["gesture"], width=19).grid(
             row=1, column=1, columnspan=2, sticky="w"
         )
-        ttk.Label(panel, text="Pinch").grid(row=2, column=0, sticky="nw")
-        ttk.Label(
-            panel, textvariable=values["pinch"], width=31,
-            wraplength=220, justify="left", anchor="w",
-        ).grid(row=2, column=1, columnspan=2, sticky="w")
         ttk.Separator(panel, orient="horizontal").grid(
-            row=3, column=0, columnspan=3, sticky="ew", pady=4
+            row=2, column=0, columnspan=3, sticky="ew", pady=4
         )
         values["deviation_bar"] = DeviationBar(
             panel, theme_name=self._theme_name,
             max_deviation=self._max_deviation,
         )
         values["deviation_bar"].grid(
-            row=4, column=0, columnspan=3, sticky="ew"
+            row=3, column=0, columnspan=3, sticky="ew"
         )
         panel.columnconfigure(1, weight=1)
         self.gesture_display[handedness] = values
@@ -209,7 +203,6 @@ class MainTab(ttk.Frame):
             if record is None:
                 values["palm"].set("—")
                 values["gesture"].set("—")
-                values["pinch"].set("—\n—\n—")
                 values["deviation_bar"].set_data(
                     None, self._theme_name, self._max_deviation
                 )
@@ -218,15 +211,6 @@ class MainTab(ttk.Frame):
             state = record["state"]
             values["palm"].set(state.palm.value.replace("_", " ").title())
             values["gesture"].set(record["command"] or "—")
-            if state.gesture is None:
-                values["pinch"].set("—\n—\n—")
-            else:
-                pinch = state.gesture
-                values["pinch"].set(
-                    f"d:     {pinch.distance:.3f}\n"
-                    f"start: {pinch.start_pos[0]:.2f}, {pinch.start_pos[1]:.2f}\n"
-                    f"now:   {pinch.current_pos[0]:.2f}, {pinch.current_pos[1]:.2f}"
-                )
             values["deviation_bar"].set_data(
                 state.fingers, self._theme_name, self._max_deviation
             )

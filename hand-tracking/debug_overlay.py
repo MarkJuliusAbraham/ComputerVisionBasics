@@ -1,7 +1,5 @@
-﻿import cv2
-from gestures.gesture_detector import Pinching
+import cv2
 from gestures.finger_classifier import FingerPosition
-from volume_controller import VolumeController
 
 
 class DebugOverlay:
@@ -9,12 +7,10 @@ class DebugOverlay:
 
     def __init__(
         self,
-        volume = VolumeController(),
         color=(0, 255, 0),
         font_scale=0.4,
         thickness=2,
     ):
-        self.volume = volume
         self.color = color
         self.font_scale = font_scale
         self.thickness = thickness
@@ -62,21 +58,17 @@ class DebugOverlay:
             y_position += 25
 
     def _draw_gesture(self, frame, gesture_state):
-        gesture = gesture_state.gesture
         palm = gesture_state.palm
 
         cv2.putText(
             frame,
-            f"Gesture: {gesture}"
-            f"FingerCount: {gesture_state.fingers_up}"
-            ,
+            f"Fingers up: {gesture_state.fingers_up}",
             (20, 30),
             self.font,
             self.font_scale,
             self.color,
             self.thickness,
         )
-
         cv2.putText(
             frame,
             f"Palm: {palm.value}",
@@ -86,21 +78,3 @@ class DebugOverlay:
             self.color,
             self.thickness,
         )
-
-        if isinstance(gesture, Pinching):
-            height, width = frame.shape[:2]
-
-            x = int((1.0 - gesture.current_pos[0]) * width)
-            y = int(gesture.current_pos[1] * height)
-
-            volume_text = f"Volume: {self.volume.level * 100:.0f}%"
-
-            cv2.putText(
-                frame,
-                volume_text,
-                (x + 10, y),
-                self.font,
-                self.font_scale,
-                self.color,
-                self.thickness,
-            )

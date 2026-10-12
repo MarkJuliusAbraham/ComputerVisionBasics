@@ -123,8 +123,19 @@ class MappingEditor(ttk.Frame):
             fill="x", pady=(12, 14)
         )
 
-        criteria = ttk.LabelFrame(profile_group, text="Gesture", padding=14)
-        criteria.pack(fill="x", pady=(0, 12))
+        self.sections = ttk.Notebook(self)
+        self.sections.pack(fill="both", expand=True, pady=(0, 8))
+        gesture_page = ttk.Frame(self.sections, padding=12)
+        command_page = ttk.Frame(self.sections, padding=12)
+        reset_page = ttk.Frame(self.sections, padding=12)
+        repeat_page = ttk.Frame(self.sections, padding=12)
+        self.sections.add(gesture_page, text="Gesture")
+        self.sections.add(command_page, text="Commands")
+        self.sections.add(reset_page, text="Reset")
+        self.sections.add(repeat_page, text="Repeat")
+
+        criteria = ttk.LabelFrame(gesture_page, text="Gesture", padding=14)
+        criteria.pack(fill="both", expand=True)
         selection = ttk.Frame(criteria)
         selection.pack(fill="x", pady=(0, 14))
         ttk.Label(selection, text="Gesture").pack(side="left", padx=(0, 8))
@@ -250,10 +261,8 @@ class MappingEditor(ttk.Frame):
             width=18,
         ).pack(side="left")
 
-        commands = ttk.LabelFrame(
-            profile_group, text="Command Sequence", padding=14
-        )
-        commands.pack(fill="x")
+        commands = ttk.LabelFrame(command_page, text="Command Sequence", padding=14)
+        commands.pack(fill="x", anchor="n")
         command_row = ttk.Frame(commands)
         command_row.pack(fill="x")
         ttk.Label(command_row, text="Keys", width=18, anchor="w").pack(side="left")
@@ -276,8 +285,8 @@ class MappingEditor(ttk.Frame):
             increment=50, width=10,
         ).pack(side="left")
 
-        reset_group = ttk.LabelFrame(self, text="Reset Gesture", padding=14)
-        reset_group.pack(fill="x", pady=(14, 0))
+        reset_group = ttk.LabelFrame(reset_page, text="Reset Gesture", padding=14)
+        reset_group.pack(fill="x", anchor="n")
         ttk.Label(
             reset_group,
             text="Adjust the hand criteria that unlock tracking after a gesture.",
@@ -352,8 +361,8 @@ class MappingEditor(ttk.Frame):
         self.reset_classification_frame.pack_forget()
         self._load_reset_match(self._reset_draft)
 
-        repeat_group = ttk.LabelFrame(self, text="Repeat Behavior", padding=14)
-        repeat_group.pack(fill="x", pady=(14, 0))
+        repeat_group = ttk.LabelFrame(repeat_page, text="Repeat Behavior", padding=14)
+        repeat_group.pack(fill="x", anchor="n")
         ttk.Label(
             repeat_group,
             text="Applies to every repeat-enabled gesture. The initial displacement "

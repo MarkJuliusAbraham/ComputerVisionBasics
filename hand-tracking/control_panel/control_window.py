@@ -12,8 +12,7 @@ from control_panel.mapping_editor import MappingEditor
 from control_panel.unapplied_changes_dialog import UnappliedChangesDialog
 from gestures.finger_classifier import FingerState, finger_categories
 from settings.settings_manager import (
-    NUMERIC_SETTINGS, Settings, SettingsData, THEMES, UI_SCALES,
-    resize_finger_thresholds,
+    Settings, SettingsData, THEMES, UI_SCALES, resize_finger_thresholds,
 )
 
 BASE_SIZE = (860, 720)  # window size in pixels at 100%
@@ -67,43 +66,16 @@ class ControlWindow:
         self.notebook.add(self.settings_tab, text="Settings")
         self.notebook.add(self.mapping_tab, text="Mapping")
 
-        self.mapping_canvas = tk.Canvas(
-            self.mapping_tab, highlightthickness=0, borderwidth=0
-        )
-        mapping_background = ttk.Style().lookup("TFrame", "background")
-        if mapping_background:
-            self.mapping_canvas.configure(background=mapping_background)
-        self.mapping_scrollbar = ttk.Scrollbar(
-            self.mapping_tab, orient="vertical",
-            command=self.mapping_canvas.yview,
-        )
-        self.mapping_canvas.configure(
-            yscrollcommand=self.mapping_scrollbar.set
-        )
-        self.mapping_canvas.pack(side="left", fill="both", expand=True)
-        self.mapping_scrollbar.pack(side="right", fill="y")
-        mapping_content = ttk.Frame(self.mapping_canvas)
-        mapping_window = self.mapping_canvas.create_window(
-            (0, 0), window=mapping_content, anchor="nw"
-        )
-        mapping_content.bind(
-            "<Configure>",
-            lambda _event: self.mapping_canvas.configure(
-                scrollregion=self.mapping_canvas.bbox("all")
-            ),
-        )
-        self.mapping_canvas.bind(
-            "<Configure>",
-            lambda event: self.mapping_canvas.itemconfigure(
-                mapping_window, width=event.width
-            ),
-        )
-        self.root.bind_all("<MouseWheel>", self._scroll_mapping)
         self.mapping_editor = MappingEditor(
-            mapping_content, on_saved=on_mapping_saved,
+            self.mapping_tab, on_saved=on_mapping_saved,
             segment_count=settings.data.finger_segment_count,
         )
-        self.mapping_editor.pack(fill="x")
+        self.mapping_editor.pack(fill="both", expand=True)
+        self._mapping_wheel_tag = "MappingWheelCapture"
+        self.root.bind_class(
+            self._mapping_wheel_tag, "<MouseWheel>", self._block_mapping_wheel
+        )
+        self._install_mapping_wheel_guard(self.mapping_editor)
         settings_tab = self.settings_tab
 
         # Topic navigation stays on the left while the selected page fills the rest.
@@ -149,8 +121,6 @@ class ControlWindow:
                     "Deviation calculation",
                     ("default", "prototype"),
                 ),
-                ("pinch_distance_threshold", "Pinch distance threshold", "number"),
-                ("pinch_release_factor", "Pinch release factor", "number"),
             ]),
             "Appearance": ("Choose the application theme and display scale", [
                 ("theme", "Theme", THEMES),
@@ -177,16 +147,6 @@ class ControlWindow:
                         row, text=label, variable=var,
                         command=self._refresh_apply_state,
                     ).pack(anchor="w")
-                elif key in NUMERIC_SETTINGS:
-                    minimum, maximum, step = NUMERIC_SETTINGS[key]
-                    var = tk.DoubleVar()
-                    ttk.Label(row, text=label).pack(side="left", fill="x", expand=True)
-                    spinbox = ttk.Spinbox(
-                        row, textvariable=var, from_=minimum, to=maximum,
-                        increment=step, width=9, command=self._refresh_apply_state,
-                    )
-                    spinbox.pack(side="right")
-                    var.trace_add("write", lambda *_: self._refresh_apply_state())
                 else:
                     var = tk.StringVar()
                     ttk.Label(row, text=label).pack(anchor="w", pady=(0, 4))
@@ -311,11 +271,20 @@ class ControlWindow:
             return
         self._default_callback_exception(exception, value, traceback)
 
-    def _scroll_mapping(self, event):
-        if self.notebook.select() != str(self.mapping_tab) or not event.delta:
-            return
-        units = int(-event.delta / 120)
-        self.mapping_canvas.yview_scroll(units or (-1 if event.delta > 0 else 1), "units")
+    def _block_mapping_wheel(self, _event):
+        if self.notebook.select() != str(self.mapping_tab):
+            return None
+        # Mapping is page-based rather than canvas-scrolled. Ignore wheel input
+        # before ttk controls can interpret it as a value change.
+        return "break"
+
+    def _install_mapping_wheel_guard(self, widget):
+        """Prevent wheel input changing fields in the Mapping tab."""
+        tags = widget.bindtags()
+        if self._mapping_wheel_tag not in tags:
+            widget.bindtags((self._mapping_wheel_tag, *tags))
+        for child in widget.winfo_children():
+            self._install_mapping_wheel_guard(child)
 
     # ---- pending-change tracking ----
 
