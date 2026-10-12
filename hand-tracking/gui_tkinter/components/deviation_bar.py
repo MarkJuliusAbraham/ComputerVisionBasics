@@ -16,29 +16,33 @@ class DeviationBar(ttk.Frame):
         self.theme_name = theme_name
         self.max_deviation = max(float(max_deviation), 0.001)
         self._rows = {}
-        self.columnconfigure(1, weight=1, minsize=100)
+        self.columnconfigure(1, weight=1, minsize=120)
 
         ttk.Label(self, text="Finger", anchor="w").grid(
-            row=0, column=0, sticky="w", padx=(0, 8), pady=(0, 3)
+            row=0, column=0, sticky="w", padx=(0, 12), pady=(0, 10)
         )
         ttk.Label(self, text="Deviation", anchor="center", justify="center").grid(
-            row=0, column=1, sticky="ew", pady=(0, 3)
+            row=0, column=1, sticky="ew", pady=(0, 10)
         )
         ttk.Label(self, text="Score / class", anchor="e").grid(
-            row=0, column=2, sticky="e", padx=(8, 0), pady=(0, 3)
+            row=0, column=2, sticky="e", padx=(12, 0), pady=(0, 10)
         )
 
         for row, name in enumerate(self.FINGERS, start=1):
-            details = tk.StringVar(value="—")
+            # Reserve two lines in every state so receiving data does not
+            # change row heights or make the hand panels jump.
+            details = tk.StringVar(self, value="—\n—")
             canvas = tk.Canvas(
-                self, height=12, width=120, highlightthickness=0, borderwidth=0
+                self, height=16, width=120, highlightthickness=0, borderwidth=0
             )
-            detail_label = ttk.Label(self, textvariable=details, width=15, anchor="e")
-            ttk.Label(self, text=name.title(), anchor="w").grid(
-                row=row, column=0, sticky="w", padx=(0, 8), pady=3
+            detail_label = ttk.Label(
+                self, textvariable=details, width=13, anchor="e", justify="right"
             )
-            canvas.grid(row=row, column=1, sticky="ew", pady=3)
-            detail_label.grid(row=row, column=2, sticky="e", padx=(8, 0), pady=3)
+            ttk.Label(self, text=name.title(), width=8, anchor="w").grid(
+                row=row, column=0, sticky="w", padx=(0, 12), pady=6
+            )
+            canvas.grid(row=row, column=1, sticky="ew", pady=6)
+            detail_label.grid(row=row, column=2, sticky="e", padx=(12, 0), pady=6)
 
             record = {
                 "canvas": canvas,
@@ -46,11 +50,9 @@ class DeviationBar(ttk.Frame):
                 "label": detail_label,
                 "ratio": 0.0,
                 "color": None,
+                "classification": None,
             }
             self._rows[name] = record
-            edge_column_width = detail_label.winfo_reqwidth()
-            self.columnconfigure(0, weight=0, minsize=edge_column_width)
-            self.columnconfigure(2, weight=0, minsize=edge_column_width)
             canvas.bind(
                 "<Configure>",
                 lambda event, item=record: self._draw_bar(item),
@@ -65,11 +67,10 @@ class DeviationBar(ttk.Frame):
         trough = gesture_bar_background(theme_name)
         for record in self._rows.values():
             record["canvas"].configure(background=trough)
-            text = record["details"].get().split()
-            classification = text[-1] if len(text) > 1 else None
+            classification = record["classification"]
             color = (
                 gesture_classification_color(theme_name, classification)
-                if classification in ("straight", "partial", "curled", "closed")
+                if classification is not None
                 else ttk.Style(self).lookup("TLabel", "foreground")
             )
             record["label"].configure(foreground=color)
@@ -86,23 +87,30 @@ class DeviationBar(ttk.Frame):
         for name, record in self._rows.items():
             finger = fingers.get(name) if fingers else None
             if finger is None:
-                record["details"].set("—")
+                record["details"].set("—\n—")
                 record["label"].configure(
                     foreground=ttk.Style(self).lookup("TLabel", "foreground")
                 )
                 record["ratio"] = 0.0
                 record["color"] = None
+                record["classification"] = None
             else:
-                classification = finger.position.value
+                classification = getattr(
+                    finger.position, "semantic_class", finger.position.value
+                )
+                label = getattr(
+                    finger.position, "label", finger.position.value.replace("_", " ").title()
+                )
                 color = gesture_classification_color(self.theme_name, classification)
                 record["details"].set(
-                    f"{finger.deviation:.1f}° {classification}"
+                    f"{finger.deviation:.1f}°\n{label}"
                 )
                 record["label"].configure(foreground=color)
                 record["ratio"] = min(
                     max(finger.deviation / self.max_deviation, 0.0), 1.0
                 )
                 record["color"] = color
+                record["classification"] = classification
             self._draw_bar(record)
 
     @staticmethod

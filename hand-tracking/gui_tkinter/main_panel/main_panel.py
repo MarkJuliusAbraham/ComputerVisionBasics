@@ -25,7 +25,7 @@ class MainPanel:
 
     def switch_camera(self):
         if self.widget is not None:
-            self.widget.switch_camera()
+            self.widget.camera.switch_camera()
 
     def set_tracking_paused(self, paused):
         if self.widget is not None:
@@ -33,22 +33,22 @@ class MainPanel:
 
     def update_camera_state(self, state, requested, active, message=None):
         if self.widget is not None:
-            self.widget.update_camera_state(state, requested, active, message)
+            self.widget.camera.update_state(state, requested, active, message)
 
     def update_gesture_display(self, hand_states, enabled=True, paused=False):
         if self.widget is not None:
-            self.widget.update_gesture_display(
+            self.widget.live_gestures.update_data(
                 hand_states, enabled=enabled, paused=paused
             )
 
     @property
     def preview_fingers(self):
-        return self.widget.preview_fingers if self.widget is not None else None
+        return self.widget.live_gestures.preview_fingers if self.widget is not None else None
 
     @property
     def preview_status(self):
-        return self.widget.preview_status if self.widget is not None else "No hand detected"
+        return self.widget.live_gestures.preview_status if self.widget is not None else "No hand detected"
 
     def set_display(self, theme_name, max_deviation):
         if self.widget is not None:
-            self.widget.set_display(theme_name, max_deviation)
+            self.widget.live_gestures.set_display(theme_name, max_deviation)
