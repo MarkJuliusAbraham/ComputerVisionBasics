@@ -32,17 +32,28 @@ FINGER_NAMES = ("thumb", "index", "middle", "ring", "pinky")
 
 def _build_straightness_options(categories):
     positions = [category.value for category in categories]
-    first_two_end = positions.index("partial") if "partial" in positions else 1
-    curled_start = positions.index("curled") if "curled" in positions else max(len(positions) - 2, 0)
-    return {
-        "Any position": None,
-        "Straight": {"straight"},
-        "Straight or Partial": set(positions[:first_two_end + 1]),
-        "Closed": {"closed"},
-        "Closed or Curled": set(positions[curled_start:]),
-        "Not Straight": set(positions[1:]),
-        "Not Closed": set(positions[:-1]),
+    options = {"Any position": None}
+    for category in categories:
+        options[category.label] = {category.value}
+    if "straight" in positions and "partial" in positions:
+        options["Straight or Partial"] = {"straight", "partial"}
+    curled_positions = {
+        category.value for category in categories
+        if category.semantic_class == "curled"
     }
+    if curled_positions:
+        first_curled = min(positions.index(value) for value in curled_positions)
+        options["Closed or Curled"] = set(positions[first_curled:])
+    for start_category, label in (
+        ("very_curled", "Very Curled or Closed"),
+        ("nearly_closed", "Nearly Closed or Closed"),
+    ):
+        if start_category in positions:
+            options[label] = set(positions[positions.index(start_category):])
+    if positions:
+        options["Not Straight"] = set(positions[1:])
+        options["Not Closed"] = set(positions[:-1])
+    return options
 
 
 class MappingEditor(ttk.Frame):
@@ -70,6 +81,8 @@ class MappingEditor(ttk.Frame):
         self._repeat_baseline = self._repeat_draft_from_settings(
             self.config.repeat_settings
         )
+        self._reset_baseline = self._reset_draft_from_match(self.config.reset_match)
+        self._reset_draft = deepcopy(self._reset_baseline)
         self._shown_id = None
         self._labels_to_ids = self._build_label_map()
 
@@ -263,6 +276,82 @@ class MappingEditor(ttk.Frame):
             increment=50, width=10,
         ).pack(side="left")
 
+        reset_group = ttk.LabelFrame(self, text="Reset Gesture", padding=14)
+        reset_group.pack(fill="x", pady=(14, 0))
+        ttk.Label(
+            reset_group,
+            text="Adjust the hand criteria that unlock tracking after a gesture.",
+        ).pack(anchor="w", pady=(0, 8))
+        reset_palm_row = ttk.Frame(reset_group)
+        reset_palm_row.pack(fill="x", pady=(0, 6))
+        ttk.Label(
+            reset_palm_row, text="Palm orientation", width=16, anchor="w"
+        ).pack(side="left")
+        self.reset_palm_var = tk.StringVar()
+        ttk.Combobox(
+            reset_palm_row, textvariable=self.reset_palm_var,
+            values=tuple(PALM_OPTIONS), state="readonly", width=22,
+        ).pack(side="left")
+        self.reset_finger_vars = {}
+        self.reset_finger_combos = {}
+        reset_mode_header = ttk.Frame(reset_group)
+        reset_mode_header.pack(fill="x", pady=(0, 6))
+        ttk.Label(reset_mode_header, text="Finger criteria").pack(side="left")
+        self.reset_finger_mode = "straightness"
+        self.reset_finger_mode_button = ttk.Button(
+            reset_mode_header, text="Use classification checkboxes",
+            command=self._toggle_reset_finger_mode, width=30,
+        )
+        self.reset_finger_mode_button.pack(side="right")
+        self.reset_finger_options_area = ttk.Frame(reset_group)
+        self.reset_finger_options_area.pack(fill="x")
+        self.reset_finger_options_area.columnconfigure(0, weight=1)
+        self.reset_straightness_frame = ttk.Frame(self.reset_finger_options_area)
+        self.reset_category_column_widgets = {}
+        self.reset_classification_frame = ttk.Frame(self.reset_finger_options_area)
+        ttk.Label(
+            self.reset_classification_frame, text="Finger", width=12, anchor="w"
+        ).grid(row=0, column=0, sticky="w")
+        for column, category in enumerate(ALL_FINGER_CATEGORIES, start=1):
+            position = category.value
+            header = ttk.Label(self.reset_classification_frame, text=category.label)
+            header.grid(row=0, column=column, sticky="ew", padx=3)
+            self.reset_category_column_widgets[position] = [header]
+            self.reset_classification_frame.columnconfigure(
+                column, weight=1, uniform="reset_position"
+            )
+        self.reset_classification_vars = {}
+        for row_index, name in enumerate(FINGER_NAMES, start=1):
+            ttk.Label(
+                self.reset_classification_frame, text=name.title(), width=12, anchor="w"
+            ).grid(row=row_index, column=0, sticky="w", pady=4)
+            self.reset_classification_vars[name] = {}
+            for column, position in enumerate(ALL_FINGER_OPTIONS, start=1):
+                variable = tk.BooleanVar()
+                checkbox = ttk.Checkbutton(self.reset_classification_frame, variable=variable)
+                checkbox.grid(row=row_index, column=column, padx=4, pady=4)
+                self.reset_category_column_widgets[position].append(checkbox)
+                self.reset_classification_vars[name][position] = variable
+
+        self._update_reset_category_widgets()
+        for name in FINGER_NAMES:
+            row = ttk.Frame(self.reset_straightness_frame)
+            row.pack(fill="x", pady=3)
+            ttk.Label(row, text=name.title(), width=16, anchor="w").pack(side="left")
+            variable = tk.StringVar()
+            combo = ttk.Combobox(
+                row, textvariable=variable,
+                values=tuple(self.straightness_options) + ("Custom classifications",),
+                state="readonly", width=24,
+            )
+            combo.pack(side="left")
+            self.reset_finger_vars[name] = variable
+            self.reset_finger_combos[name] = combo
+        self.reset_straightness_frame.pack(fill="x")
+        self.reset_classification_frame.pack(fill="x")
+        self.reset_classification_frame.pack_forget()
+        self._load_reset_match(self._reset_draft)
+
         repeat_group = ttk.LabelFrame(self, text="Repeat Behavior", padding=14)
         repeat_group.pack(fill="x", pady=(14, 0))
         ttk.Label(
@@ -306,6 +395,9 @@ class MappingEditor(ttk.Frame):
             self.palm_var, self.commands_var, self.delay_var,
             self.tracked_finger_var,
             *self.repeat_vars.values(),
+            self.reset_palm_var,
+            *self.reset_finger_vars.values(),
+            *(var for group in self.reset_classification_vars.values() for var in group.values()),
             *(var for group in self.finger_vars.values() for var in group.values()),
             *self.straightness_vars.values(),
         ):
@@ -321,12 +413,20 @@ class MappingEditor(ttk.Frame):
     def set_segment_count(self, segment_count):
         """Refresh available profile criteria to match the active classifier."""
         self._capture_draft()
+        self._capture_reset_match()
         self.categories = finger_categories(segment_count)
         self.finger_options = tuple(category.value for category in self.categories)
         self.straightness_options = _build_straightness_options(self.categories)
         for combo in self.straightness_combos.values():
             combo.configure(values=tuple(self.straightness_options))
+        for combo in self.reset_finger_combos.values():
+            combo.configure(
+                values=tuple(self.straightness_options) + ("Custom classifications",)
+            )
         self._update_category_widgets()
+        self._update_reset_category_widgets()
+        self._load_reset_match(self._reset_draft)
+        self._refresh_reset_finger_mode()
         if self._shown_id is not None:
             self._load_draft(self._drafts[self._shown_id])
 
@@ -336,6 +436,20 @@ class MappingEditor(ttk.Frame):
             self.category_column_widgets.items(), start=1
         ):
             self.classification_frame.columnconfigure(
+                column, weight=1 if position in active else 0
+            )
+            for widget in widgets:
+                if position in active:
+                    widget.grid()
+                else:
+                    widget.grid_remove()
+
+    def _update_reset_category_widgets(self):
+        active = set(self.finger_options)
+        for column, (position, widgets) in enumerate(
+            self.reset_category_column_widgets.items(), start=1
+        ):
+            self.reset_classification_frame.columnconfigure(
                 column, weight=1 if position in active else 0
             )
             for widget in widgets:
@@ -388,6 +502,77 @@ class MappingEditor(ttk.Frame):
             "max_repeats": str(settings.max_repeats),
         }
 
+    @staticmethod
+    def _reset_draft_from_match(match):
+        return {
+            "palm": match.palm,
+            "fingers": {
+                name: set(match.fingers.get(name, ())) for name in FINGER_NAMES
+            },
+        }
+
+    def _load_reset_match(self, draft):
+        self._loading_form = True
+        self.reset_palm_var.set(next(
+            label for label, value in PALM_OPTIONS.items() if value == draft["palm"]
+        ))
+        for name, variable in self.reset_finger_vars.items():
+            selected = draft["fingers"][name]
+            for position, checkbox in self.reset_classification_vars[name].items():
+                checkbox.set(position in selected)
+            label = next(
+                (
+                    option for option, positions in self.straightness_options.items()
+                    if (not selected if positions is None else selected == positions)
+                ),
+                "Custom classifications",
+            )
+            variable.set(label)
+        self._loading_form = False
+
+    def _capture_reset_match(self):
+        self._reset_draft["palm"] = PALM_OPTIONS[self.reset_palm_var.get()]
+        if self.reset_finger_mode == "classifications":
+            for name, variables in self.reset_classification_vars.items():
+                self._reset_draft["fingers"][name] = {
+                    position for position, variable in variables.items()
+                    if variable.get() and position in self.finger_options
+                }
+        else:
+            for name, variable in self.reset_finger_vars.items():
+                label = variable.get()
+                if label == "Custom classifications":
+                    continue
+                positions = self.straightness_options[label]
+                self._reset_draft["fingers"][name] = (
+                    set() if positions is None else set(positions)
+                )
+        return self._reset_draft
+
+    def _toggle_reset_finger_mode(self):
+        self._capture_reset_match()
+        self.reset_finger_mode = (
+            "classifications" if self.reset_finger_mode == "straightness"
+            else "straightness"
+        )
+        self._load_reset_match(self._reset_draft)
+        self._refresh_reset_finger_mode()
+        self._refresh_save_state()
+
+    def _refresh_reset_finger_mode(self):
+        if self.reset_finger_mode == "straightness":
+            self.reset_classification_frame.pack_forget()
+            self.reset_straightness_frame.pack(fill="x")
+            self.reset_finger_mode_button.configure(
+                text="Use classification checkboxes"
+            )
+        else:
+            self.reset_straightness_frame.pack_forget()
+            self.reset_classification_frame.pack(fill="x")
+            self.reset_finger_mode_button.configure(
+                text="Use straightness controls"
+            )
+
     def _load_repeat_settings(self, draft):
         self._loading_form = True
         for key, variable in self.repeat_vars.items():
@@ -417,10 +602,12 @@ class MappingEditor(ttk.Frame):
 
     def is_dirty(self):
         self._capture_draft()
+        self._capture_reset_match()
         return (
             self._drafts != self._baseline_drafts
             or self._definitions != self._baseline_definitions
             or self._capture_repeat_settings() != self._repeat_baseline
+            or self._reset_draft != self._reset_baseline
         )
 
     def _refresh_save_state(self):
@@ -432,6 +619,8 @@ class MappingEditor(ttk.Frame):
         self._drafts = deepcopy(self._baseline_drafts)
         self._definitions = list(self._baseline_definitions)
         self._load_repeat_settings(self._repeat_baseline)
+        self._reset_draft = deepcopy(self._reset_baseline)
+        self._load_reset_match(self._reset_draft)
         self._labels_to_ids = self._build_label_map()
         self.selector.configure(values=tuple(self._labels_to_ids))
         if self._shown_id not in self._drafts:
@@ -527,13 +716,15 @@ class MappingEditor(ttk.Frame):
         self._loading_form = False
 
     def _editor_changed(self):
-        if self._loading_form or self._shown_id is None:
+        if self._loading_form:
             return
-        self._capture_draft()
-        self._sync_finger_controls(self._drafts[self._shown_id])
-        self._labels_to_ids = self._build_label_map()
-        self.selector.configure(values=tuple(self._labels_to_ids))
-        self.selected_id.set(self._label_for_id(self._shown_id))
+        if self._shown_id is not None:
+            self._capture_draft()
+            self._sync_finger_controls(self._drafts[self._shown_id])
+            self._labels_to_ids = self._build_label_map()
+            self.selector.configure(values=tuple(self._labels_to_ids))
+            self.selected_id.set(self._label_for_id(self._shown_id))
+        self._capture_reset_match()
         self._refresh_save_state()
 
     def _manage_gestures(self):
@@ -698,7 +889,17 @@ class MappingEditor(ttk.Frame):
         config = replace(
             self.config, definitions=tuple(definitions),
             repeat_settings=repeat_settings,
+            reset_match=GestureMatch(
+                palm=self._capture_reset_match()["palm"],
+                fingers={
+                    name: frozenset(positions)
+                    for name, positions in self._reset_draft["fingers"].items()
+                    if positions
+                },
+            ),
         )
+        if config.reset_match.palm is None and not config.reset_match.fingers:
+            raise ValueError("Reset gesture must constrain palm orientation or at least one finger")
         GestureConfig._validate_no_overlaps(config.definitions)
         return config
 
@@ -740,6 +941,9 @@ class MappingEditor(ttk.Frame):
         self._repeat_baseline = self._repeat_draft_from_settings(
             config.repeat_settings
         )
+        self._reset_baseline = self._reset_draft_from_match(config.reset_match)
+        self._reset_draft = deepcopy(self._reset_baseline)
+        self._load_reset_match(self._reset_draft)
         self._load_repeat_settings(self._repeat_baseline)
         self._labels_to_ids = self._build_label_map()
         self._shown_id = next(iter(self._drafts), None)
@@ -801,6 +1005,9 @@ class MappingEditor(ttk.Frame):
         self._repeat_baseline = self._repeat_draft_from_settings(
             config.repeat_settings
         )
+        self._reset_baseline = self._reset_draft_from_match(config.reset_match)
+        self._reset_draft = deepcopy(self._reset_baseline)
+        self._load_reset_match(self._reset_draft)
         self._load_repeat_settings(self._repeat_baseline)
         self._labels_to_ids = self._build_label_map()
         if self._shown_id is not None:
