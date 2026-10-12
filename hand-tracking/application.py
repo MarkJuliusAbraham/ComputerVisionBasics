@@ -3,6 +3,7 @@ import cv2
 
 from control_panel.control_window import ControlWindow
 from frame_profiler import FrameProfiler
+from gesture_path_overlay import GesturePathOverlay
 
 
 class Application:
@@ -29,6 +30,7 @@ class Application:
         self.debug_overlay = debug_overlay
         self.detector = detector
         self.gesture_handler = gesture_handler
+        self.gesture_path_overlay = GesturePathOverlay(drawer)
         self.image_overlay = image_overlay
         self.invoker_overlay = invoker_overlay
         self.settings = settings
@@ -110,13 +112,20 @@ class Application:
         if not self.running:
             return
 
-        self.frame_profiler.begin_frame()
         try:
             self._process_frame_work()
         finally:
-            summary = self.frame_profiler.finish_frame()
-            if summary:
-                print(summary)
+            fps = self.frame_profiler.finish_frame()
+            if fps is not None:
+                samples, average_ms, maximum_ms = self.tracker.take_latency_stats()
+                if samples:
+                    print(
+                        f"FPS: {fps:.1f} | detection latency "
+                        f"submit→result avg/max: "
+                        f"{average_ms:.2f}/{maximum_ms:.2f} ms"
+                    )
+                else:
+                    print(f"FPS: {fps:.1f} | detection latency: no results")
 
     def _process_frame_work(self):
         """Run and measure the work for one event-loop frame."""
@@ -154,6 +163,9 @@ class Application:
                 cv2.flip(frame, 1, dst=frame)
             self._latest_hand_states = []
 
+        with self.frame_profiler.measure("gesture_path.draw"):
+            self.gesture_path_overlay.draw(frame, self.gesture_handler.drawing_path)
+
         now = time.monotonic()
         if now - self._gesture_display_updated >= 0.1:
             with self.frame_profiler.measure("ui.gesture_display"):
@@ -182,7 +194,11 @@ class Application:
             state = self.detector.update(hand, hand_name)
             self.debug_overlay.update(frame, state)
 
-            command = self.gesture_handler.handle(state)
+            command = self.gesture_handler.handle(
+                state,
+                hand_name,
+                frame_size=(frame.shape[1], frame.shape[0]),
+            )
             hand_states.append({
                 "handedness": hand_name,
                 "state": state,

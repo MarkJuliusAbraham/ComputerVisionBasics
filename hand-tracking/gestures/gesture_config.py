@@ -113,6 +113,7 @@ class GestureDefinition:
     match: GestureMatch
     commands: CommandSequence
     repeat_fingers: tuple[str, ...] = ()
+    tracked_finger: str | None = None
 
     def to_dict(self):
         result = {
@@ -120,6 +121,7 @@ class GestureDefinition:
             "name": self.name,
             "match": self.match.to_dict(),
             "commands": self.commands.to_dict(),
+            "tracked_finger": self.tracked_finger,
         }
         if self.repeat_fingers:
             result["repeat_fingers"] = list(self.repeat_fingers)
@@ -127,14 +129,69 @@ class GestureDefinition:
 
 
 @dataclass(frozen=True)
+class RepeatSettings:
+    initial_displacement: float = 0.03
+    distance_threshold: float = 0.09
+    min_interval_seconds: float = 0.05
+    max_repeats: int = 2
+
+    def to_dict(self):
+        return {
+            "initial_displacement": self.initial_displacement,
+            "distance_threshold": self.distance_threshold,
+            "min_interval_seconds": self.min_interval_seconds,
+            "max_repeats": self.max_repeats,
+        }
+
+    @classmethod
+    def from_dict(cls, value):
+        if value is None:
+            return cls()
+        if not isinstance(value, dict):
+            raise ValueError("repeat_settings must be an object")
+        defaults = cls()
+        settings = cls(
+            initial_displacement=value.get(
+                "initial_displacement", defaults.initial_displacement
+            ),
+            distance_threshold=value.get("distance_threshold", defaults.distance_threshold),
+            min_interval_seconds=value.get("min_interval_seconds", defaults.min_interval_seconds),
+            max_repeats=value.get("max_repeats", defaults.max_repeats),
+        )
+        numeric = (
+            settings.initial_displacement, settings.distance_threshold,
+            settings.min_interval_seconds,
+        )
+        if any(not isinstance(number, (int, float)) or isinstance(number, bool)
+               for number in numeric):
+            raise ValueError(
+                "Initial displacement, repeat distance, and interval must be numbers"
+            )
+        if (
+            settings.initial_displacement < 0
+            or settings.distance_threshold <= 0
+            or settings.min_interval_seconds < 0
+        ):
+            raise ValueError(
+                "Initial displacement and interval must be non-negative; "
+                "repeat distance must be positive"
+            )
+        if not isinstance(settings.max_repeats, int) or isinstance(settings.max_repeats, bool) or settings.max_repeats < 0:
+            raise ValueError("max_repeats must be a non-negative integer")
+        return settings
+
+
+@dataclass(frozen=True)
 class GestureConfig:
     definitions: tuple[GestureDefinition, ...]
     reset_match: GestureMatch
+    repeat_settings: RepeatSettings = RepeatSettings()
 
     def to_dict(self):
         return {
             "version": 1,
             "reset_match": self.reset_match.to_dict(),
+            "repeat_settings": self.repeat_settings.to_dict(),
             "gestures": [definition.to_dict() for definition in self.definitions],
         }
 
@@ -198,6 +255,19 @@ class GestureConfig:
             if len(set(repeat_fingers)) != len(repeat_fingers):
                 raise ValueError(f"{location}.repeat_fingers cannot contain duplicates")
 
+            tracked_finger = (
+                item["tracked_finger"]
+                if "tracked_finger" in item
+                else (repeat_fingers[0] if repeat_fingers else "index")
+            )
+            if tracked_finger is not None and (
+                not isinstance(tracked_finger, str)
+                or tracked_finger not in FINGER_NAMES
+            ):
+                raise ValueError(
+                    f"{location}.tracked_finger must be one of {sorted(FINGER_NAMES)}"
+                )
+
             definitions.append(GestureDefinition(
                 id=gesture_id,
                 name=name,
@@ -206,11 +276,15 @@ class GestureConfig:
                     item.get("commands"), f"{location}.commands"
                 ),
                 repeat_fingers=tuple(repeat_fingers),
+                tracked_finger=tracked_finger,
             ))
 
         cls._validate_no_overlaps(definitions)
         reset_match = GestureMatch.from_dict(raw.get("reset_match"), "reset_match")
-        return cls(tuple(definitions), reset_match)
+        return cls(
+            tuple(definitions), reset_match,
+            RepeatSettings.from_dict(raw.get("repeat_settings")),
+        )
 
     @staticmethod
     def _validate_no_overlaps(definitions):

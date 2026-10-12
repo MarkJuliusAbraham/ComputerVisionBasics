@@ -13,6 +13,7 @@ from gestures.gesture_config import (
     GestureConfig,
     GestureDefinition,
     GestureMatch,
+    RepeatSettings,
 )
 from gestures.profile_manager import GestureProfileManager
 from control_panel.gesture_profile_picker import GestureProfilePickerDialog
@@ -56,6 +57,9 @@ class MappingEditor(ttk.Frame):
         self._definitions = list(self.config.definitions)
         self._baseline_definitions = list(self._definitions)
         self._baseline_drafts = deepcopy(self._drafts)
+        self._repeat_baseline = self._repeat_draft_from_settings(
+            self.config.repeat_settings
+        )
         self._shown_id = None
         self._labels_to_ids = self._build_label_map()
 
@@ -198,6 +202,20 @@ class MappingEditor(ttk.Frame):
         self.finger_options_area.pack_propagate(False)
         self._refresh_finger_mode()
 
+        tracked_finger_row = ttk.Frame(hand_criteria)
+        tracked_finger_row.pack(fill="x", pady=(10, 0))
+        ttk.Label(
+            tracked_finger_row, text="Tracked fingertip", width=18, anchor="w"
+        ).pack(side="left")
+        self.tracked_finger_var = tk.StringVar(value="Index")
+        ttk.Combobox(
+            tracked_finger_row,
+            textvariable=self.tracked_finger_var,
+            values=("None", *(name.title() for name in FINGER_NAMES)),
+            state="readonly",
+            width=18,
+        ).pack(side="left")
+
         commands = ttk.LabelFrame(
             profile_group, text="Command Sequence", padding=14
         )
@@ -224,6 +242,33 @@ class MappingEditor(ttk.Frame):
             increment=50, width=10,
         ).pack(side="left")
 
+        repeat_group = ttk.LabelFrame(self, text="Repeat Behavior", padding=14)
+        repeat_group.pack(fill="x", pady=(14, 0))
+        ttk.Label(
+            repeat_group,
+            text="Applies to every repeat-enabled gesture. The initial displacement "
+                 "is a dead zone from gesture start; repeats then measure the drawn "
+                 "fingertip path (0.09 = 9% of frame width).",
+        ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 8))
+        repeat_rows = (
+            ("Initial displacement before repeats", "initial_displacement", 0.0, 0.5, 0.01),
+            ("Path distance between repeats", "distance_threshold", 0.01, 1.0, 0.01),
+            ("Minimum repeat interval (ms)", "min_interval_ms", 0, 2000, 10),
+            ("Maximum repeats per gesture", "max_repeats", 0, 20, 1),
+        )
+        self.repeat_vars = {}
+        for row, (label, key, lower, upper, increment) in enumerate(repeat_rows, start=1):
+            ttk.Label(repeat_group, text=label, width=32, anchor="w").grid(
+                row=row, column=0, sticky="w", pady=4
+            )
+            variable = tk.StringVar()
+            ttk.Spinbox(
+                repeat_group, textvariable=variable, from_=lower, to=upper,
+                increment=increment, width=12,
+            ).grid(row=row, column=1, sticky="w", padx=(8, 0), pady=4)
+            self.repeat_vars[key] = variable
+        self._load_repeat_settings(self._repeat_baseline)
+
         footer = ttk.Frame(self)
         footer.pack(side="bottom", fill="x", pady=(12, 0))
         self.status = tk.StringVar(value="Gesture mappings loaded")
@@ -238,6 +283,8 @@ class MappingEditor(ttk.Frame):
 
         for variable in (
             self.palm_var, self.commands_var, self.delay_var,
+            self.tracked_finger_var,
+            *self.repeat_vars.values(),
             *(var for group in self.finger_vars.values() for var in group.values()),
             *self.straightness_vars.values(),
         ):
@@ -282,7 +329,26 @@ class MappingEditor(ttk.Frame):
             },
             "commands": ", ".join(step.value for step in definition.commands.steps),
             "delay": str(definition.commands.delay_ms_between_steps),
+            "tracked_finger": definition.tracked_finger,
         }
+
+    @staticmethod
+    def _repeat_draft_from_settings(settings):
+        return {
+            "initial_displacement": str(settings.initial_displacement),
+            "distance_threshold": str(settings.distance_threshold),
+            "min_interval_ms": str(round(settings.min_interval_seconds * 1000)),
+            "max_repeats": str(settings.max_repeats),
+        }
+
+    def _load_repeat_settings(self, draft):
+        self._loading_form = True
+        for key, variable in self.repeat_vars.items():
+            variable.set(draft[key])
+        self._loading_form = False
+
+    def _capture_repeat_settings(self):
+        return {key: variable.get() for key, variable in self.repeat_vars.items()}
 
     def _capture_draft(self):
         gesture_id = self._shown_id
@@ -296,6 +362,10 @@ class MappingEditor(ttk.Frame):
             "fingers": fingers,
             "commands": self.commands_var.get(),
             "delay": self.delay_var.get(),
+            "tracked_finger": (
+                None if self.tracked_finger_var.get() == "None"
+                else self.tracked_finger_var.get().lower()
+            ),
         }
 
     def is_dirty(self):
@@ -303,6 +373,7 @@ class MappingEditor(ttk.Frame):
         return (
             self._drafts != self._baseline_drafts
             or self._definitions != self._baseline_definitions
+            or self._capture_repeat_settings() != self._repeat_baseline
         )
 
     def _refresh_save_state(self):
@@ -313,6 +384,7 @@ class MappingEditor(ttk.Frame):
     def discard(self):
         self._drafts = deepcopy(self._baseline_drafts)
         self._definitions = list(self._baseline_definitions)
+        self._load_repeat_settings(self._repeat_baseline)
         self._labels_to_ids = self._build_label_map()
         self.selector.configure(values=tuple(self._labels_to_ids))
         if self._shown_id not in self._drafts:
@@ -344,6 +416,10 @@ class MappingEditor(ttk.Frame):
             self.straightness_vars[name].set(label)
         self.commands_var.set(draft["commands"])
         self.delay_var.set(draft["delay"])
+        self.tracked_finger_var.set(
+            draft["tracked_finger"].title()
+            if draft["tracked_finger"] else "None"
+        )
         self._loading_form = False
 
     def _current_finger_selections(self):
@@ -451,6 +527,7 @@ class MappingEditor(ttk.Frame):
             name="New Gesture",
             match=new_match,
             commands=CommandSequence((CommandStep(type="key_tap", value="a"),)),
+            tracked_finger="index",
         )
 
     def _save_managed_gestures(self, staged_definitions, selected_id=None):
@@ -554,10 +631,27 @@ class MappingEditor(ttk.Frame):
                 delay_ms_between_steps=delay,
             )
             definitions.append(replace(
-                definition, name=draft["name"], match=match, commands=commands
+                definition,
+                name=draft["name"],
+                match=match,
+                commands=commands,
+                tracked_finger=draft["tracked_finger"],
             ))
 
-        config = replace(self.config, definitions=tuple(definitions))
+        repeat_draft = self._capture_repeat_settings()
+        try:
+            repeat_settings = RepeatSettings.from_dict({
+                "initial_displacement": float(repeat_draft["initial_displacement"]),
+                "distance_threshold": float(repeat_draft["distance_threshold"]),
+                "min_interval_seconds": float(repeat_draft["min_interval_ms"]) / 1000,
+                "max_repeats": int(repeat_draft["max_repeats"]),
+            })
+        except (TypeError, ValueError) as error:
+            raise ValueError(f"Invalid repeat behavior setting: {error}") from error
+        config = replace(
+            self.config, definitions=tuple(definitions),
+            repeat_settings=repeat_settings,
+        )
         GestureConfig._validate_no_overlaps(config.definitions)
         return config
 
@@ -596,6 +690,10 @@ class MappingEditor(ttk.Frame):
         self._definitions = list(config.definitions)
         self._baseline_definitions = list(self._definitions)
         self._baseline_drafts = deepcopy(self._drafts)
+        self._repeat_baseline = self._repeat_draft_from_settings(
+            config.repeat_settings
+        )
+        self._load_repeat_settings(self._repeat_baseline)
         self._labels_to_ids = self._build_label_map()
         self._shown_id = next(iter(self._drafts), None)
         self.selector.configure(values=tuple(self._labels_to_ids))
@@ -653,6 +751,10 @@ class MappingEditor(ttk.Frame):
         self._definitions = list(config.definitions)
         self._baseline_definitions = list(self._definitions)
         self._baseline_drafts = deepcopy(self._drafts)
+        self._repeat_baseline = self._repeat_draft_from_settings(
+            config.repeat_settings
+        )
+        self._load_repeat_settings(self._repeat_baseline)
         self._labels_to_ids = self._build_label_map()
         if self._shown_id is not None:
             self.selector.configure(values=tuple(self._labels_to_ids))

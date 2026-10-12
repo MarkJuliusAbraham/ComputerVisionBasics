@@ -1,5 +1,6 @@
 ﻿import time
 from pathlib import Path
+import threading
 from types import SimpleNamespace
 
 import cv2
@@ -29,9 +30,22 @@ class HandTracker:
         self.max_width = max_width
         self._latest = _EMPTY
         self._last_ts = 0
+        self._latency_lock = threading.Lock()
+        self._submission_times = {}
+        self._latency_total_ms = 0.0
+        self._latency_max_ms = 0.0
+        self._latency_samples = 0
 
     def _on_result(self, result, output_image, timestamp_ms):
-        # Runs on MediaPipe's thread; a plain reference swap is safe here
+        completed_at = time.perf_counter()
+        with self._latency_lock:
+            submitted_at = self._submission_times.pop(timestamp_ms, None)
+            if submitted_at is not None:
+                latency_ms = (completed_at - submitted_at) * 1000
+                self._latency_total_ms += latency_ms
+                self._latency_max_ms = max(self._latency_max_ms, latency_ms)
+                self._latency_samples += 1
+        # Runs on MediaPipe's thread; a plain reference swap is safe here.
         self._latest = result
 
     def detect(self, frame):
@@ -48,8 +62,32 @@ class HandTracker:
         ts = max(int(time.monotonic() * 1000), self._last_ts + 1)
         self._last_ts = ts
 
-        self.landmarker.detect_async(mp_image, ts)
+        submitted_at = time.perf_counter()
+        with self._latency_lock:
+            self._submission_times[ts] = submitted_at
+            # LIVE_STREAM can drop frames; keep unmatched timestamps bounded.
+            if len(self._submission_times) > 256:
+                self._submission_times.pop(next(iter(self._submission_times)))
+        try:
+            self.landmarker.detect_async(mp_image, ts)
+        except Exception:
+            with self._latency_lock:
+                self._submission_times.pop(ts, None)
+            raise
         return self._latest
+
+    def take_latency_stats(self):
+        """Return (samples, average_ms, maximum_ms) since the previous read."""
+        with self._latency_lock:
+            samples = self._latency_samples
+            average_ms = (
+                self._latency_total_ms / samples if samples else None
+            )
+            maximum_ms = self._latency_max_ms if samples else None
+            self._latency_samples = 0
+            self._latency_total_ms = 0.0
+            self._latency_max_ms = 0.0
+        return samples, average_ms, maximum_ms
 
     def close(self):
         self.landmarker.close()

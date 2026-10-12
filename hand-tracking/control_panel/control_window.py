@@ -61,14 +61,47 @@ class ControlWindow:
             max_deviation=self._max_deviation,
         )
         self.settings_tab = ttk.Frame(self.notebook)
-        mapping_tab = ttk.Frame(self.notebook)
+        self.mapping_tab = ttk.Frame(self.notebook)
         self.notebook.add(self.main_tab, text="Main")
         self.notebook.add(self.settings_tab, text="Settings")
-        self.notebook.add(mapping_tab, text="Mapping")
-        self.mapping_editor = MappingEditor(
-            mapping_tab, on_saved=on_mapping_saved
+        self.notebook.add(self.mapping_tab, text="Mapping")
+
+        self.mapping_canvas = tk.Canvas(
+            self.mapping_tab, highlightthickness=0, borderwidth=0
         )
-        self.mapping_editor.pack(fill="both", expand=True)
+        mapping_background = ttk.Style().lookup("TFrame", "background")
+        if mapping_background:
+            self.mapping_canvas.configure(background=mapping_background)
+        self.mapping_scrollbar = ttk.Scrollbar(
+            self.mapping_tab, orient="vertical",
+            command=self.mapping_canvas.yview,
+        )
+        self.mapping_canvas.configure(
+            yscrollcommand=self.mapping_scrollbar.set
+        )
+        self.mapping_canvas.pack(side="left", fill="both", expand=True)
+        self.mapping_scrollbar.pack(side="right", fill="y")
+        mapping_content = ttk.Frame(self.mapping_canvas)
+        mapping_window = self.mapping_canvas.create_window(
+            (0, 0), window=mapping_content, anchor="nw"
+        )
+        mapping_content.bind(
+            "<Configure>",
+            lambda _event: self.mapping_canvas.configure(
+                scrollregion=self.mapping_canvas.bbox("all")
+            ),
+        )
+        self.mapping_canvas.bind(
+            "<Configure>",
+            lambda event: self.mapping_canvas.itemconfigure(
+                mapping_window, width=event.width
+            ),
+        )
+        self.root.bind_all("<MouseWheel>", self._scroll_mapping)
+        self.mapping_editor = MappingEditor(
+            mapping_content, on_saved=on_mapping_saved
+        )
+        self.mapping_editor.pack(fill="x")
         settings_tab = self.settings_tab
 
         # Topic navigation stays on the left while the selected page fills the rest.
@@ -268,6 +301,12 @@ class ControlWindow:
             return
         self._default_callback_exception(exception, value, traceback)
 
+    def _scroll_mapping(self, event):
+        if self.notebook.select() != str(self.mapping_tab) or not event.delta:
+            return
+        units = int(-event.delta / 120)
+        self.mapping_canvas.yview_scroll(units or (-1 if event.delta > 0 else 1), "units")
+
     # ---- pending-change tracking ----
 
     def get_values(self):
@@ -414,7 +453,7 @@ class ControlWindow:
         self._current_tab = new_tab
 
         leaving_settings = old_tab == str(self.settings_tab) and new_tab != old_tab
-        leaving_mapping = old_tab == str(self.mapping_editor.master) and new_tab != old_tab
+        leaving_mapping = old_tab == str(self.mapping_tab) and new_tab != old_tab
         if leaving_settings and self.is_dirty():
             if not self._confirm_leave():
                 # Cancel: go back to the Settings tab
@@ -444,7 +483,7 @@ class ControlWindow:
         if current_tab == str(self.settings_tab) and self.is_dirty():
             if not self._confirm_leave():
                 return
-        elif current_tab == str(self.mapping_editor.master) and self.mapping_editor.is_dirty():
+        elif current_tab == str(self.mapping_tab) and self.mapping_editor.is_dirty():
             if not self._confirm_mapping_leave():
                 return
         self.on_close()

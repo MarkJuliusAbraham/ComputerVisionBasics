@@ -45,6 +45,16 @@ class HandDrawer:
         self.ring_color = (0, 255, 255)
         self.pinky_color = (255, 0, 255)
         self.knuckle_color = (255, 255, 255)
+        self.finger_colors = {
+            "thumb": self.thumb_color,
+            "index": self.index_color,
+            "middle": self.middle_color,
+            "ring": self.ring_color,
+            "pinky": self.pinky_color,
+        }
+
+    def color_for_finger(self, finger_name):
+        return self.finger_colors[finger_name]
 
     def draw(self, frame, hands):
         height, width = frame.shape[:2]
