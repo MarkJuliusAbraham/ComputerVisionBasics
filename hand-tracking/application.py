@@ -2,7 +2,11 @@
 import cv2
 from contextlib import ExitStack
 
-from gui.control_window import ControlWindow
+from gui_tkinter.control_window import ControlWindow as Gui
+from gui_tkinter.core.state import ControlCallbacks, ControlWindowContext, PanelSet
+from gui_tkinter.mapping_panel import MappingPanel
+from gui_tkinter.main_panel import MainPanel
+from gui_tkinter.settings_panel import SettingsPanel
 from frame_profiler import FrameProfiler
 from gesture_path_overlay import GesturePathOverlay
 
@@ -45,18 +49,28 @@ class Application:
         self._camera_ui_state = None
         self._gesture_display_updated = 0.0
         self._latest_hand_states = []
-        self.control_window = ControlWindow(
-            self.request_restart,
-            self.request_quit,
-            settings=settings,
+        panels = PanelSet(
+            main=MainPanel(),
+            settings=SettingsPanel(),
+            mapping=MappingPanel(on_saved=self.apply_gesture_config),
+        )
+        self.panels = panels
+        callbacks = ControlCallbacks(
+            on_restart=self.request_restart,
+            on_close=self.request_quit,
             on_settings_path=self.load_settings_file,
             on_apply=self.apply_changes,
-            camera_index=self.camera.requested_index,
             on_camera_switch=self.camera.request_switch,
             on_toggle_tracking=self.toggle_tracking,
             on_tracking_tab_active=self.set_tracking_tab_active,
-            on_mapping_saved=self.apply_gesture_config,
         )
+        context = ControlWindowContext(
+            settings=settings,
+            callbacks=callbacks,
+            panels=panels,
+            camera_index=self.camera.requested_index,
+        )
+        self.gui = Gui(context)
 
 
     def apply_settings(self):
@@ -71,12 +85,19 @@ class Application:
         """Called when the user browses to a different file."""
         self.settings.use_file(path)
         self.apply_settings()
-        self.control_window.show_settings(self.settings)
+        self.panels.settings.show_settings(self.settings)
+        self.panels.main.set_display(
+            self.settings.data.theme,
+            self.settings.data.finger_classification_thresholds[-1],
+        )
 
     def apply_changes(self, data):
         """Called when the user clicks Apply in the GUI."""
         self.settings.update(data)
         self.apply_settings()
+        self.panels.main.set_display(
+            data.theme, data.finger_classification_thresholds[-1]
+        )
 
     def apply_gesture_config(self, config):
         """Apply a validated, saved gesture mapping to the running handler."""
@@ -95,18 +116,18 @@ class Application:
         self._latest_hand_states = []
         self._gesture_display_updated = 0.0
         self.tracking_paused = False
-        self.control_window.set_tracking_paused(False)
+        self.panels.main.set_tracking_paused(False)
         self.invoker_overlay.spell_stack.clear()
         self.invoker_overlay.current_image = None
         self.invoker_overlay.image_expiry = 0
 
     def request_quit(self):
         self.running = False
-        self.control_window.quit()
+        self.gui.quit()
 
     def toggle_tracking(self):
         self.tracking_paused = not self.tracking_paused
-        self.control_window.set_tracking_paused(self.tracking_paused)
+        self.panels.main.set_tracking_paused(self.tracking_paused)
 
     def set_tracking_tab_active(self, active):
         """Suspend hand detection while the Main tab is not visible."""
@@ -114,8 +135,8 @@ class Application:
 
     def run(self):
         try:
-            self.control_window.after(0, self._process_frame)
-            self.control_window.run()
+            self.gui.after(0, self._process_frame)
+            self.gui.run()
         except KeyboardInterrupt:
             self.running = False
         finally:
@@ -152,7 +173,7 @@ class Application:
             camera_state = self.camera.status()
         if camera_state != self._camera_ui_state:
             with self.frame_profiler.measure("ui.camera_status"):
-                self.control_window.update_camera_state(*camera_state)
+                self.panels.main.update_camera_state(*camera_state)
             self._camera_ui_state = camera_state
         with self.frame_profiler.measure("camera.read_copy"):
             frame = self.camera.read()
@@ -161,10 +182,10 @@ class Application:
             # another camera rather than terminating the whole application.
             with self.frame_profiler.measure("opencv.wait_key"):
                 cv2.waitKey(1)
-            self.control_window.after(10, self._process_frame)
+            self.gui.after(10, self._process_frame)
             return
 
-        preview_active = self.control_window.tracking_preview_active
+        preview_active = self.panels.settings.tracking_preview_active
         if self.track_hands and not self.tracking_paused and (self._tracking_tab_active or preview_active):
             with self.frame_profiler.measure("tracker.prepare_submit"):
                 tracking = self.tracker.detect(frame)
@@ -187,10 +208,15 @@ class Application:
         now = time.monotonic()
         if now - self._gesture_display_updated >= 0.1:
             with self.frame_profiler.measure("ui.gesture_display"):
-                self.control_window.update_gesture_display(
+                self.panels.main.update_gesture_display(
                     self._latest_hand_states,
                     enabled=self.track_hands,
                     paused=self.tracking_paused,
+                )
+                main_panel = self.panels.main
+                self.panels.settings.set_preview_data(
+                    main_panel.preview_fingers,
+                    main_panel.preview_status,
                 )
             self._gesture_display_updated = now
 
@@ -202,7 +228,7 @@ class Application:
         with self.frame_profiler.measure("opencv.wait_key"):
             cv2.waitKey(1)
 
-        self.control_window.after(1, self._process_frame)
+        self.gui.after(1, self._process_frame)
 
     def process_hands(self, frame, tracking, invoke_commands=True):
         hand_states = []
@@ -232,5 +258,5 @@ class Application:
             cleanup.callback(cv2.destroyAllWindows)
             cleanup.callback(self.tracker.close)
             cleanup.callback(self.camera.release)
-            cleanup.callback(self.control_window.close)
+            cleanup.callback(self.gui.close)
             cleanup.callback(self.gesture_handler.close)

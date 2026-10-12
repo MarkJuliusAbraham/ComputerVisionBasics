@@ -12,7 +12,7 @@ from hand_drawer import HandDrawer
 from hand_tracker import HandTracker
 from image_module.image_overlay import ImageOverlay
 from settings.settings_manager import Settings
-from gui.dpi import enable_dpi_awareness
+from gui_tkinter.components.dpi import enable_dpi_awareness
 
 def main():
     enable_dpi_awareness()

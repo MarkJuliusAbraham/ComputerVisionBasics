@@ -39,7 +39,10 @@ DEFAULT_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "settings.json"
 )
 
-THEMES = ("Light", "Dark")
+THEMES = (
+    "Light", "Dark", "Tkinter", "Classic Desktop",
+    "ImGui Light", "ImGui Dark", "ImGui Classic",
+)
 UI_SCALES = ("Auto", "100%", "125%", "150%", "175%", "200%")
 @dataclass
 class SettingsData:
