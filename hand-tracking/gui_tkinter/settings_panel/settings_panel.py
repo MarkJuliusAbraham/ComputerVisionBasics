@@ -20,6 +20,8 @@ class SettingsPanel:
         on_apply: ApplySettingsCallback | None = None, *,
         scope: SettingsScope = SHARED_SETTINGS_SCOPE, form_factory=SettingsForm,
     ):
+        self.actions = None
+        self.root = None
         self.on_settings_path = on_settings_path
         self.on_apply = on_apply
         self.scope = scope
