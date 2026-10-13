@@ -3,7 +3,6 @@
 from tkinter import ttk
 
 from gui_tkinter.components.camera_section import CameraSection
-from gui_tkinter.components.scrollable_frame import ScrollableFrame
 from gui_tkinter.components.theme import ThemeMetrics
 
 
@@ -17,20 +16,20 @@ class MainTab(ttk.Frame):
         ttk.Button(actions, text="Restart", command=callbacks.on_restart).pack(
             side="right", padx=(0, 8),
         )
-        scroll = ScrollableFrame(self)
-        scroll.pack(fill="both", expand=True)
-        ttk.Label(scroll.content, text="Tracking hub", font=self.appearance.heading_font).pack(
+        content = ttk.Frame(self)
+        content.pack(fill="both", expand=True)
+        ttk.Label(content, text="Tracking hub", font=self.appearance.heading_font).pack(
             anchor="w", pady=(0, 6),
         )
         ttk.Label(
-            scroll.content, text="Open a tracking workspace to inspect data and configure its behavior.",
+            content, text="Open a tracking workspace to inspect data and configure its behavior.",
             wraplength=600,
         ).pack(anchor="w", pady=(0, 20))
         self.camera = CameraSection(
-            scroll.content, camera_index=camera_index, on_switch=callbacks.on_camera_switch,
+            content, camera_index=camera_index, on_switch=callbacks.on_camera_switch,
         )
         self.camera.pack(fill="x", pady=(0, 20))
-        group = ttk.LabelFrame(scroll.content, text="Tracking workspaces", padding=16)
+        group = ttk.LabelFrame(content, text="Tracking workspaces", padding=16)
         group.pack(fill="x")
         for module in tracking_modules.modules.values():
             row = ttk.Frame(group)

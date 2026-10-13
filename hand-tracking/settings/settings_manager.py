@@ -10,6 +10,8 @@ from gestures.finger_classifier import (
     finger_categories,
 )
 
+from .theme_choices import THEMES, resolve_theme
+
 
 def default_finger_thresholds(segment_count=4):
     """Keep the original four bands and subdivide the higher-bend ranges."""
@@ -41,7 +43,6 @@ DEFAULT_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "settings.json"
 )
 
-THEMES = ("Light", "Dark")
 UI_SCALES = ("Auto", "100%", "125%", "150%", "175%", "200%")
 @dataclass
 class SettingsData:
@@ -64,9 +65,7 @@ class SettingsData:
         fields = cls.__dataclass_fields__
         data = {key: value for key, value in values.items() if key in fields}
         defaults = cls()
-        if data.get("theme") not in THEMES:
-            previous_theme = str(data.get("theme", "")).lower()
-            data["theme"] = "Dark" if previous_theme.endswith("dark") else "Light"
+        data["theme"] = resolve_theme(data.get("theme", defaults.theme)).name
         try:
             segment_count = int(data.get("finger_segment_count", 0))
         except (TypeError, ValueError, OverflowError):

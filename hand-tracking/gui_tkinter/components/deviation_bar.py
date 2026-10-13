@@ -86,7 +86,10 @@ class DeviationBar(ttk.Frame):
                 if classification is not None
                 else palette.foreground
             )
-            record["label"].configure(foreground=color)
+            record["label"].configure(
+                foreground=palette.classification_text(classification)
+                if classification is not None else palette.foreground,
+            )
             record["color"] = color if classification else None
             self._draw_bar(record)
 
@@ -112,7 +115,9 @@ class DeviationBar(ttk.Frame):
                 classification = finger.position.value
                 color = palette.classification(classification)
                 record["details"].set(self.layout.detail_text(finger))
-                record["label"].configure(foreground=color)
+                record["label"].configure(
+                    foreground=palette.classification_text(classification),
+                )
                 record["ratio"] = min(
                     max(finger.deviation / self.max_deviation, 0.0), 1.0
                 )

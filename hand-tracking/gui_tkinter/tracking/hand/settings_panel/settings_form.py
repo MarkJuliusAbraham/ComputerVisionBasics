@@ -9,7 +9,7 @@ class HandSettingsForm(SectionedSettingsForm):
     def __init__(self, master, *, settings, on_change=None, on_settings_path=None):
         super().__init__(master, on_change)
         self.tracking = TrackingSection(
-            self.scroll.content, settings.data.theme,
+            self.content, settings.data.theme,
             settings.data.finger_classification_thresholds[-1],
             on_change=self.notify_change,
         )

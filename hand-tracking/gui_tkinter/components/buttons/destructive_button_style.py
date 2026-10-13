@@ -25,21 +25,43 @@ class DestructiveButtonStyle:
 
     def apply(self):
         style = ttk.Style(self.root)
-        foreground = self.colors.destructive
-        disabled = (
+        palette = self.colors.destructive
+        disabled_foreground = (
             style.lookup("TButton", "foreground", ("disabled",))
             or style.lookup("TLabel", "foreground", ("disabled",))
-            or foreground
+            or palette.foreground
         )
-        snapshot = (style.theme_use(), foreground, disabled)
+        disabled_background = (
+            style.lookup("TButton", "background", ("disabled",))
+            or style.lookup("TFrame", "background")
+            or palette.background
+        )
+        disabled_border = (
+            style.lookup("TButton", "bordercolor", ("disabled",))
+            or palette.edges.outline
+        )
+        snapshot = (
+            style.theme_use(), palette, disabled_foreground, disabled_background, disabled_border,
+        )
         if snapshot != self._snapshot:
             # Configuring styles can emit ThemeChanged. Cache first to avoid
             # repeated styling when every discard button receives that event.
             self._snapshot = snapshot
-            style.configure(self.STYLE_NAME, foreground=foreground)
+            style.configure(
+                self.STYLE_NAME, background=palette.background, foreground=palette.foreground,
+                bordercolor=palette.edges.outline, lightcolor=palette.edges.highlight,
+                darkcolor=palette.edges.shadow, focuscolor=palette.foreground, relief="raised",
+            )
             style.map(
                 self.STYLE_NAME,
-                foreground=[("disabled", disabled), ("!disabled", foreground)],
+                background=[("disabled", disabled_background), ("pressed", palette.pressed),
+                            ("active", palette.hover), ("!disabled", palette.background)],
+                foreground=[("disabled", disabled_foreground), ("!disabled", palette.foreground)],
+                bordercolor=[("disabled", disabled_border), ("focus", palette.foreground),
+                             ("!disabled", palette.edges.outline)],
+                lightcolor=[("disabled", disabled_border), ("!disabled", palette.edges.highlight)],
+                darkcolor=[("disabled", disabled_border), ("!disabled", palette.edges.shadow)],
+                relief=[("disabled", "solid"), ("pressed", "sunken")],
             )
-        # Layout, padding, typography, and background inherit from TButton.
+        # Layout, padding, and typography inherit from the shared button theme.
         return self.STYLE_NAME

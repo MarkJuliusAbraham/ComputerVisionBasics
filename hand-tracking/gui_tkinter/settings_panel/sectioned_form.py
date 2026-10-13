@@ -3,16 +3,14 @@
 import tkinter as tk
 from tkinter import ttk
 
-from gui_tkinter.components.scrollable_frame import ScrollableFrame
-
 
 class SectionedSettingsForm(ttk.Frame):
     def __init__(self, master, on_change=None):
         super().__init__(master)
         self._loading = False
         self._on_change = on_change
-        self.scroll = ScrollableFrame(self)
-        self.scroll.pack(fill="both", expand=True)
+        self.content = ttk.Frame(self)
+        self.content.pack(fill="both", expand=True)
         self.sections = {}
         self.variables = {}
         self.status_var = tk.StringVar(self)
@@ -49,12 +47,6 @@ class SectionedSettingsForm(ttk.Frame):
         self.load_data(settings.data)
 
     def set_theme(self, theme_name):
-        self.scroll.set_surface()
         for section in self.sections.values():
             if hasattr(section, "set_theme"):
                 section.set_theme(theme_name)
-
-    def show_section(self, name):
-        section = self.sections.get(name)
-        if section is not None:
-            self.scroll.scroll_to(section)

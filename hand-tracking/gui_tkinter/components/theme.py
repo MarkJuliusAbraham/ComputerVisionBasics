@@ -3,36 +3,19 @@ from dataclasses import dataclass
 from tkinter import font as tkfont
 from tkinter import ttk
 
+from settings.theme_choices import resolve_theme
+
+from .themes.buttons import ButtonTheme
+from .themes.nier_automata import NierAutomataTheme
+from .themes.palettes import PALETTES
+from .themes.popups import PopupTheme
+from .themes.title_bar import TitleBarPalette, TitleBarTheme
+from .themes.typography import ThemeTypography
+
 try:
     import sv_ttk
 except ImportError:  # Keep the restored Tk route usable without an optional theme package.
     sv_ttk = None
-
-# Our setting values -> sv-ttk's names
-_MODES = {"Light": "light", "Dark": "dark"}
-
-# Semantic gesture colors are defined with the app theme so labels stay readable
-# on both theme backgrounds. Widgets request these styles by classification.
-_GESTURE_COLORS = {
-    "Light": {
-        "straight": "#1e7e34",
-        "partial": "#8a6100",
-        "curled": "#b54708",
-        "very_curled": "#9950a8",
-        "nearly_closed": "#b83273",
-        "closed": "#c5221f",
-    },
-    "Dark": {
-        "straight": "#81c995",
-        "partial": "#fdd663",
-        "curled": "#ffb77c",
-        "very_curled": "#c8a0e8",
-        "nearly_closed": "#f39ac5",
-        "closed": "#f28b82",
-    },
-}
-_GESTURE_BAR_BACKGROUNDS = {"Light": "#e5e7eb", "Dark": "#343a43"}
-_TEXT_COLORS = {"Light": "#202020", "Dark": "#f4f4f4"}
 
 BASE_FONT_SIZE = 9            # points at 100%
 BASE_BUTTON_PADDING = (8, 3)  # pixels at 100%
@@ -51,24 +34,37 @@ class AlertPalette:
 class ThemeColors:
     """Semantic UI colors resolved from the currently painted theme."""
 
-    HIGH_ALERT = {
-        "Light": AlertPalette("#b42318", "#fee4e2"),
-        "Dark": AlertPalette("#ff9b94", "#532422"),
-    }
-
     def __init__(self, widget):
         self.widget = widget
 
     @property
+    def choice(self):
+        return resolve_theme(ttk.Style(self.widget).theme_use())
+
+    @property
+    def palette(self):
+        return PALETTES[self.choice.name]
+
+    @property
     def high_alert(self):
-        theme = ttk.Style(self.widget).theme_use()
-        name = "Dark" if theme.endswith("dark") else "Light"
-        return self.HIGH_ALERT[name]
+        palette = self.palette
+        return AlertPalette(palette.alert, palette.alert_surface)
 
     @property
     def destructive(self):
-        """Use the theme's alert color for actions that discard user changes."""
-        return self.high_alert.foreground
+        """Filled destructive action colors, separate from warning text."""
+        return self.palette.destructive
+
+    @property
+    def title_bar(self):
+        style = ttk.Style(self.widget)
+        palette = self.palette
+        return TitleBarPalette(
+            background=style.lookup("TFrame", "background") or palette.surface,
+            foreground=style.lookup("TLabel", "foreground") or palette.foreground,
+            border=palette.border,
+            dark=self.choice.dark,
+        )
 
 
 class ThemeMetrics:
@@ -118,16 +114,19 @@ def resolve_scale(root, value):
 
 def gesture_classification_color(theme_name, classification):
     """Return the active theme's semantic color for a finger classification."""
-    palette = _GESTURE_COLORS.get(theme_name, _GESTURE_COLORS["Light"])
-    key = getattr(classification, "value", classification)
-    return palette.get(key, palette["straight"])
+    palette = PALETTES[resolve_theme(theme_name).name].deviation
+    return palette.color(classification).fill
+
+
+def gesture_classification_text_color(theme_name, classification):
+    """Use a readable shade of the bar's color for small classification text."""
+    palette = PALETTES[resolve_theme(theme_name).name].deviation
+    return palette.color(classification).text
 
 
 def gesture_bar_background(theme_name):
     """Return the theme's subdued track color for deviation bars."""
-    return _GESTURE_BAR_BACKGROUNDS.get(
-        theme_name, _GESTURE_BAR_BACKGROUNDS["Light"]
-    )
+    return PALETTES[resolve_theme(theme_name).name].track
 
 
 @dataclass(frozen=True)
@@ -142,6 +141,9 @@ class DeviationPalette:
     def classification(self, category):
         return gesture_classification_color(self.theme_name, category)
 
+    def classification_text(self, category):
+        return gesture_classification_text_color(self.theme_name, category)
+
 
 class DeviationTheme:
     """Resolve canvas colors from the application theme and active ttk styles."""
@@ -151,20 +153,12 @@ class DeviationTheme:
 
     def palette(self, theme_name):
         style = ttk.Style(self.widget)
-        surface = style.lookup("TFrame", "background")
-        if not surface:
-            suffix = "dark" if style.theme_use().endswith("dark") else "light"
-            try:
-                surface = self.widget.tk.call(
-                    "set", f"::ttk::theme::sv_{suffix}::colors(-bg)"
-                )
-            except tk.TclError:
-                pass
-            surface = surface or self.widget.winfo_toplevel().cget("background")
-        foreground = (
-            style.lookup("TLabel", "foreground")
-            or _TEXT_COLORS.get(theme_name, _TEXT_COLORS["Light"])
-        )
+        # ThemeChanged may arrive before panels receive the updated settings.
+        # Read the painted theme so cached panel names cannot restore old colors.
+        theme_name = resolve_theme(style.theme_use()).name
+        palette = PALETTES[theme_name]
+        surface = style.lookup("TFrame", "background") or palette.surface
+        foreground = style.lookup("TLabel", "foreground") or palette.foreground
         return DeviationPalette(
             theme_name, surface, gesture_bar_background(theme_name), foreground,
         )
@@ -172,17 +166,28 @@ class DeviationTheme:
 
 def apply_theme(root, name, scale=1.0):
     """Apply the named theme at the given scale. Safe to call at any time."""
-    if sv_ttk is not None:
-        sv_ttk.set_theme(_MODES.get(name, "light"))
-    else:
-        ttk.Style(root).theme_use("clam")
-
-    # Tk scaling is pixels per point: 96/72 at 100%
+    # Tk scaling is pixels per point: 96/72 at 100%.
     root.tk.call("tk", "scaling", scale * 96 / 72)
+
+    choice = resolve_theme(name)
+    if choice.family == "standard" and sv_ttk is not None:
+        sv_ttk.set_theme("dark" if choice.dark else "light", root=root)
+        # Sun Valley sets this through a queued ThemeChanged callback. Set
+        # its font now so newly built panels read the correct typography.
+        ttk.Style(root).configure(".", font="SunValleyBodyFont")
+    else:
+        families = (
+            ("Bahnschrift", "Segoe UI", "Arial") if choice.family == "nier"
+            else ("Segoe UI", "Arial")
+        )
+        NierAutomataTheme(
+            root, name=choice.style_name, palette=PALETTES[choice.name],
+            font_families=families,
+        ).apply(scale, BASE_FONT_SIZE)
 
     for font_name in _SV_FONTS:
         try:
-            tkfont.nametofont(font_name).configure(size=BASE_FONT_SIZE)
+            tkfont.nametofont(font_name, root=root).configure(size=BASE_FONT_SIZE)
         except tk.TclError:
             pass  # that font name doesn't exist in this sv-ttk version
 
@@ -191,12 +196,14 @@ def apply_theme(root, name, scale=1.0):
         int(BASE_BUTTON_PADDING[1] * scale),
     )
     style = ttk.Style(root)
-    try:
-        combo_font = tkfont.nametofont("SunValleyBodyFont")
-        style.configure("TCombobox", font=combo_font)
-        root.option_add("*TCombobox*Listbox.font", str(combo_font))
-    except tk.TclError:
-        pass
+    combo_font = style.lookup("TLabel", "font") or "TkDefaultFont"
+    style.configure("TCombobox", font=combo_font)
+    ThemeTypography(root, combo_font).apply()
+    ButtonTheme(
+        root, PALETTES[choice.name], minimum_width=0 if choice.family == "nier" else None,
+    ).apply()
+    PopupTheme.for_root(root).apply(PALETTES[choice.name], combo_font)
     style.configure("TButton", padding=padding)
     style.configure("Accent.TButton", padding=padding)
+    TitleBarTheme.for_root(root, lambda: ThemeColors(root).title_bar).refresh()
 

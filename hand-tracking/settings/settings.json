@@ -1,8 +1,8 @@
 {
   "track_hands": true,
   "profile": true,
-  "theme": "Dark",
-  "ui_scale": "150%",
+  "theme": "Nier Light",
+  "ui_scale": "200%",
   "finger_segment_count": 6,
   "finger_classification_thresholds": [
     15.4,

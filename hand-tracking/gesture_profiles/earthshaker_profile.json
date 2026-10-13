@@ -36,6 +36,9 @@
       "name": "Echo",
       "match": {
         "fingers": {
+          "thumb": [
+            "straight"
+          ],
           "index": [
             "straight"
           ],
