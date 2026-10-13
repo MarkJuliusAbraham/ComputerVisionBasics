@@ -1,4 +1,5 @@
 """Gesture mapping panel owned by the hand tracking workspace."""
+import tkinter as tk
 from .mapping_editor import MappingEditor
 
 
@@ -13,9 +14,9 @@ class MappingPanel:
         self.on_saved = on_saved
         self.config_path = config_path
         self.segment_count = segment_count
-        self.widget = None
+        self.widget: MappingEditor | None = None
 
-    def build(self, parent):
+    def build(self, parent: tk.Misc) -> MappingEditor:
         self.widget = MappingEditor(
             parent, on_saved=self.on_saved, config_path=self.config_path,
             segment_count=self.segment_count,
@@ -28,13 +29,13 @@ class MappingPanel:
         if self.widget is not None:
             self.widget.set_segment_count(segment_count)
 
-    def is_dirty(self):
+    def is_dirty(self) -> bool:
         return self.widget is not None and self.widget.is_dirty()
 
-    def save(self):
+    def save(self) -> bool:
         return self.widget is None or self.widget.save()
 
-    def discard(self):
+    def discard(self) -> None:
         if self.widget is not None:
             self.widget.discard()
 

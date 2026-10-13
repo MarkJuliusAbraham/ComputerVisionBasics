@@ -1,6 +1,7 @@
 """The small UI contract implemented by each tracking workspace."""
 
 from typing import Protocol
+import tkinter as tk
 
 
 class TrackingModule(Protocol):
@@ -8,7 +9,7 @@ class TrackingModule(Protocol):
     name: str
     description: str
 
-    def open(self, parent) -> None: ...
+    def open(self, parent: tk.Misc) -> None: ...
 
     def confirm_close(self) -> bool: ...
 

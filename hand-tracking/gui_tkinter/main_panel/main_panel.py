@@ -1,14 +1,23 @@
 """Deferred main hub panel."""
 
+import tkinter as tk
+
+from gui_tkinter.core.state import ControlCallbacks
+from gui_tkinter.tracking.registry import TrackingWindowRegistry
+from settings.settings_manager import SettingsData
+
 from .main_tab import MainTab
 
 
 class MainPanel:
-    def __init__(self, tracking_modules):
+    def __init__(self, tracking_modules: TrackingWindowRegistry) -> None:
         self.tracking_modules = tracking_modules
-        self.widget = None
+        self.widget: MainTab | None = None
 
-    def build(self, parent, *, callbacks, settings, camera_index=0):
+    def build(
+        self, parent: tk.Misc, *, callbacks: ControlCallbacks,
+        settings: SettingsData, camera_index: int = 0,
+    ) -> MainTab:
         self.widget = MainTab(
             parent, self.tracking_modules, callbacks, camera_index=camera_index,
         )

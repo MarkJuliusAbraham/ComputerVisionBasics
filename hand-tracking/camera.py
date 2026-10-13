@@ -36,7 +36,7 @@ class Camera:
         # Kept for the application loop's existing unavailable-camera check.
         return True if self.index is not None else None
 
-    def request_switch(self, camera_index):
+    def request_switch(self, camera_index: int) -> None:
         """Queue a camera change; device handles remain private to the worker."""
         camera_index = int(camera_index)
         with self._lock:

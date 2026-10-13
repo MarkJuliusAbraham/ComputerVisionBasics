@@ -1,10 +1,17 @@
 """Composition of hand tracking panels, independent of the hub's layout."""
 
+from __future__ import annotations
+
+import tkinter as tk
 from dataclasses import dataclass
 from typing import Callable
 
-from gui_tkinter.core.state import ControlCallbacks, ControlWindowContext, PanelSet
+from gestures.gesture_config import GestureConfig
+from gui_tkinter.core.callbacks import Action, ApplySettingsCallback
+from gui_tkinter.core.state import ControlCallbacks, PanelSet, WindowContext
 from gui_tkinter.tracking.window import TrackingWindow
+from landmarker import HandLandmarkerAsset
+from settings.settings_manager import Settings
 
 from .debug_panel import HandDebugPanel
 from .mapping_panel import MappingPanel
@@ -13,11 +20,11 @@ from .settings_panel import HandSettingsPanel
 
 @dataclass(frozen=True)
 class HandTrackingActions:
-    restart: Callable
-    toggle_pause: Callable
-    activity_changed: Callable
-    apply_settings: Callable
-    apply_mapping: Callable
+    restart: Action
+    toggle_pause: Action
+    activity_changed: Callable[[bool], None]
+    apply_settings: ApplySettingsCallback
+    apply_mapping: Callable[[GestureConfig], None]
 
 
 class HandTrackingModule:
@@ -25,7 +32,10 @@ class HandTrackingModule:
     name = "Hand tracking"
     description = "Live hand and gesture data, detection settings, and command mappings."
 
-    def __init__(self, settings, actions, *, model_asset=None):
+    def __init__(
+        self, settings: Settings, actions: HandTrackingActions, *,
+        model_asset: HandLandmarkerAsset | None = None,
+    ) -> None:
         self.settings = settings
         self.actions = actions
         self.debug = HandDebugPanel(on_open_settings=self.open_settings)
@@ -33,11 +43,11 @@ class HandTrackingModule:
         self.mapping = MappingPanel(
             on_saved=actions.apply_mapping, segment_count=settings.data.finger_segment_count,
         )
-        self.window = None
+        self.window: TrackingWindow | None = None
 
-    def open(self, parent):
+    def open(self, parent: tk.Misc) -> None:
         if self.window is None:
-            context = ControlWindowContext(
+            context = WindowContext(
                 self.settings,
                 ControlCallbacks(
                     on_restart=self.actions.restart, on_close=self.close,
@@ -50,12 +60,12 @@ class HandTrackingModule:
             self.window = TrackingWindow(parent, context, self.name)
         self.window.show()
 
-    def open_settings(self):
+    def open_settings(self) -> None:
         if self.window is not None:
             self.window.show_settings()
 
     @property
-    def preview_active(self):
+    def preview_active(self) -> bool:
         return (
             self.window is not None and self.window.preview_visible
             and self.settings_panel.tracking_preview_active
@@ -79,14 +89,14 @@ class HandTrackingModule:
         self.settings_panel.show_settings(settings)
         self.synchronize(settings, ())
 
-    def confirm_close(self):
+    def confirm_close(self) -> bool:
         return self.window is None or self.window.confirm_close()
 
-    def resize(self, scale):
+    def resize(self, scale: float) -> None:
         if self.window is not None:
             self.window.resize(scale)
 
-    def close(self):
+    def close(self) -> None:
         if self.window is not None:
             self.window.close()
             self.window = None

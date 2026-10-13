@@ -2,7 +2,7 @@ import json
 import os
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field, replace
-from typing import Callable
+from typing import Callable, TypeAlias
 
 from landmarker import DEFAULT_MODEL_PATH
 from gestures.optimistic.settings import OptimisticTrackingSettings
@@ -146,6 +146,10 @@ class SettingsData:
 DEFAULTS = SettingsData()
 CHOICES = {"theme": THEMES, "ui_scale": UI_SCALES}
 
+# Values submitted by a scoped settings form, before JSON serialization.
+SettingsValue: TypeAlias = bool | int | float | str | list[float] | OptimisticTrackingSettings
+SettingsValues: TypeAlias = dict[str, SettingsValue]
+
 
 @dataclass(frozen=True)
 class SettingsScope:
@@ -155,15 +159,15 @@ class SettingsScope:
     fields: tuple[str, ...]
     validator: Callable[[SettingsData], str] | None = None
 
-    def values(self, data):
+    def values(self, data: SettingsData) -> SettingsValues:
         return {key: deepcopy(getattr(data, key)) for key in self.fields}
 
-    def merge(self, data, values):
+    def merge(self, data: SettingsData, values: SettingsValues) -> SettingsData:
         if set(values) - set(self.fields):
             raise ValueError(f"Unexpected fields for {self.name} settings")
         return replace(data, **deepcopy(values))
 
-    def validation_error(self, data):
+    def validation_error(self, data: SettingsData) -> str:
         return self.validator(data) if self.validator is not None else ""
 
 
@@ -251,7 +255,7 @@ class Settings:
             self.data = previous
             raise
 
-    def update_fields(self, values):
+    def update_fields(self, values: SettingsValues) -> SettingsData:
         """Commit a panel's fields while preserving every other module's values."""
         self.update(replace(self.data, **deepcopy(values)))
         return self.data

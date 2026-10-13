@@ -1,7 +1,8 @@
 """Shared save/discard decisions for editable panels before leaving them."""
 
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Callable
+import tkinter as tk
 
 from gui_tkinter.components.unapplied_changes_dialog import UnappliedChangesDialog
 
@@ -12,17 +13,17 @@ class PendingChanges:
 
     name: str
     is_dirty: Callable[[], bool]
-    save: Callable[[], Any]
-    discard: Callable[[], Any]
+    save: Callable[[], bool | None]
+    discard: Callable[[], bool | None]
 
 
 class UnsavedChangesGuard:
-    def __init__(self, parent, *, dialog_factory=UnappliedChangesDialog):
+    def __init__(self, parent: tk.Misc, *, dialog_factory=UnappliedChangesDialog) -> None:
         self.parent = parent
         self.dialog_factory = dialog_factory
         self._confirming = False
 
-    def confirm(self, changes, *, return_label="Return"):
+    def confirm(self, changes: PendingChanges, *, return_label: str = "Return") -> bool:
         if self._confirming:
             return False
         self._confirming = True

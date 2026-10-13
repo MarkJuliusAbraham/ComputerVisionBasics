@@ -10,6 +10,8 @@ from gui_tkinter.tracking import TrackingWindowRegistry
 from gui_tkinter.tracking.hand import HandTrackingActions, HandTrackingModule
 from frame_profiler import FrameProfiler
 from gesture_path_overlay import GesturePathOverlay
+from gestures.gesture_config import GestureConfig
+from settings.settings_manager import Settings, SettingsData, SettingsValues
 
 
 class Application:
@@ -25,7 +27,7 @@ class Application:
         gesture_handler,
         image_overlay,
         invoker_overlay,
-        settings,
+        settings: Settings,
         *,
         preview,
     ):
@@ -98,7 +100,7 @@ class Application:
         self.frame_profiler.enabled = bool(self.profile)
         self.theme = self.settings.data.theme
 
-    def load_settings_file(self, path):
+    def load_settings_file(self, path: str) -> bool:
         """Called when the user browses to a different file."""
         if not self.gui.confirm_pending_changes():
             return False
@@ -110,7 +112,7 @@ class Application:
         self._gesture_display_snapshot = None
         return True
 
-    def apply_changes(self, values):
+    def apply_changes(self, values: SettingsValues) -> SettingsData:
         """Apply only the fields owned by the settings panel that submitted them."""
         model_path = values.get("hand_landmarker_model_path")
         if model_path and model_path != self.settings.data.hand_landmarker_model_path:
@@ -123,18 +125,18 @@ class Application:
         self._gesture_display_snapshot = None
         return data
 
-    def apply_gesture_config(self, config):
+    def apply_gesture_config(self, config: GestureConfig) -> None:
         """Apply a validated, saved gesture mapping to the running handler."""
         self.gesture_handler.configure(config)
 
-    def request_restart(self):
+    def request_restart(self) -> None:
         if not self.running:
             return
         self.camera.request_switch(self.camera.requested_index)
         self._camera_ui_state = None
         self.restart_hand_tracking()
 
-    def restart_hand_tracking(self):
+    def restart_hand_tracking(self) -> None:
         """Reset the hand pipeline without rebuilding windows or the shared camera."""
         if not self.running:
             return
@@ -149,17 +151,17 @@ class Application:
         self.invoker_overlay.current_image = None
         self.invoker_overlay.image_expiry = 0
 
-    def request_quit(self):
+    def request_quit(self) -> None:
         self.running = False
         self.gui.quit()
 
-    def toggle_tracking(self):
+    def toggle_tracking(self) -> None:
         self.tracking_paused = not self.tracking_paused
         if self.tracking_paused:
             self.gesture_handler.suspend()
         self.hand_tracking.debug.set_tracking_paused(self.tracking_paused)
 
-    def set_tracking_tab_active(self, active):
+    def set_tracking_tab_active(self, active: bool) -> None:
         """Only the hand window's visible Debugging page can invoke commands."""
         self._tracking_tab_active = active
         if not active:

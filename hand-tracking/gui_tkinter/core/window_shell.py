@@ -2,16 +2,20 @@
 
 from tkinter import ttk
 from dataclasses import replace
+import tkinter as tk
 
 from gui_tkinter.components.guarded_notebook import GuardedNotebook
 
-from .state import WindowView
+from .state import WindowContext, WindowView
 from .window_geometry import WindowGeometry
 from .window_lifecycle import WindowLifecycleController
 
 
 class WindowShell:
-    def __init__(self, window, context, *, title, main_title, base_size):
+    def __init__(
+        self, window: tk.Tk | tk.Toplevel, context: WindowContext, *,
+        title: str, main_title: str, base_size: tuple[int, int],
+    ) -> None:
         self.context = context
         window.title(title)
         notebook = GuardedNotebook(window)
@@ -28,7 +32,7 @@ class WindowShell:
         self.geometry = WindowGeometry(window, base_size)
         self.lifecycle = WindowLifecycleController(self.view, context)
 
-    def build(self):
+    def build(self) -> None:
         panels = self.context.panels
         callbacks = self.context.callbacks
         panels.main.build(
@@ -40,5 +44,7 @@ class WindowShell:
             panels.settings.on_apply = callbacks.on_apply
         panels.settings.build(self.view.settings_tab, self.context.settings)
         if panels.mapping is not None:
-            panels.mapping.build(self.view.mapping_tab)
+            mapping_tab = self.view.mapping_tab
+            assert mapping_tab is not None
+            panels.mapping.build(mapping_tab)
         self.lifecycle.bind()

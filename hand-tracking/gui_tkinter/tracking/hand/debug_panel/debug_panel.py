@@ -1,7 +1,10 @@
 """Deferred hand debugging panel with cached live data."""
 
 from dataclasses import replace
+import tkinter as tk
+from gui_tkinter.core.state import ControlCallbacks
 from landmarker import ModelStatus
+from settings.settings_manager import SettingsData
 
 from .debug_tab import HandDebugTab
 from .live_hand_data import LiveHandData
@@ -9,13 +12,16 @@ from .live_hand_data import LiveHandData
 
 class HandDebugPanel:
     def __init__(self, on_open_settings=None):
-        self.widget = None
+        self.widget: HandDebugTab | None = None
         self._paused = False
         self.data = LiveHandData()
         self._model_status = ModelStatus()
         self._on_open_settings = on_open_settings
 
-    def build(self, parent, *, callbacks, settings, camera_index=0):
+    def build(
+        self, parent: tk.Misc, *, callbacks: ControlCallbacks,
+        settings: SettingsData, camera_index: int = 0,
+    ) -> HandDebugTab:
         self.widget = HandDebugTab(
             parent, on_restart=callbacks.on_restart, on_close=callbacks.on_close,
             on_toggle_tracking=callbacks.on_toggle_tracking,

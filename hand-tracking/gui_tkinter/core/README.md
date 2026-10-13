@@ -6,6 +6,12 @@ Tracking-specific controls belong under `tracking/<module>/`.
 Shared package initializers remain lightweight; import controls and services
 from the modules that define them.
 
+`WindowContext` carries shared window dependencies. `ControlWindowContext`
+extends it with the hub's required tracking registry. `PanelCollection` and
+the panel protocols describe the shell's interfaces; `PanelSet` retains the
+concrete main-panel type for its application owner. Callback signatures are
+declared in `callbacks.py`, with scoped values declared by the settings manager.
+
 ## Shared behavior
 
 - `ChangeNotifications` owns variable subscriptions. Use `suspended()` while

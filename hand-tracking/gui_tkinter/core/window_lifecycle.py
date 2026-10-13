@@ -1,11 +1,20 @@
 """Visibility, tab transitions, and unsaved changes for any panel window."""
 
+from __future__ import annotations
+
+import tkinter as tk
+from tkinter import ttk
+
 from .unsaved_changes_guard import PendingChanges, UnsavedChangesGuard
 from .idle_refresh import IdleRefresh
+from .state import WindowContext, WindowView
 
 
 class WindowLifecycleController:
-    def __init__(self, view, context, *, changes_guard=None):
+    def __init__(
+        self, view: WindowView, context: WindowContext, *,
+        changes_guard: UnsavedChangesGuard | None = None,
+    ) -> None:
         self.view = view
         self.context = context
         self._notified_active = None
@@ -26,7 +35,7 @@ class WindowLifecycleController:
                 "Mapping", mapping.is_dirty, mapping.save, mapping.discard,
             )
 
-    def bind(self):
+    def bind(self) -> None:
         self.view.current_tab = self.view.notebook.select()
         self.view.notebook.before_select = self._before_tab_change
         self.view.notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
@@ -35,16 +44,16 @@ class WindowLifecycleController:
         self.view.root.bind("<Unmap>", self._visibility_changed, add="+")
         self.activity_refresh.schedule()
 
-    def _before_tab_change(self, current_tab, _target_tab):
+    def _before_tab_change(self, current_tab: str, _target_tab: str) -> bool:
         changes = self.editable_pages.get(current_tab)
         return changes is None or self.changes_guard.confirm(changes)
 
-    def _on_tab_changed(self, _event):
+    def _on_tab_changed(self, _event: tk.Event[tk.Misc]) -> None:
         self.view.current_tab = self.view.notebook.select()
         self.notify_activity()
         self.focus_refresh.schedule()
 
-    def _clear_page_focus(self):
+    def _clear_page_focus(self) -> None:
         """Clear an auto-focused page input without activating another window."""
         window = self.view.root
         focused = window.focus_get()
@@ -55,26 +64,26 @@ class WindowLifecycleController:
         ):
             window.focus_set()
 
-    def _visibility_changed(self, event):
+    def _visibility_changed(self, event: tk.Event[tk.Misc]) -> None:
         if event.widget is self.view.root:
             self.activity_refresh.schedule()
 
-    def page_visible(self, page):
+    def page_visible(self, page: ttk.Frame) -> bool:
         return bool(self.view.root.winfo_viewable()) and self.view.notebook.select() == str(page)
 
-    def notify_activity(self):
+    def notify_activity(self) -> None:
         callback = self.context.callbacks.on_main_active
         active = self.page_visible(self.view.main_tab)
         if callback and active != self._notified_active:
             self._notified_active = active
             callback(active)
 
-    def confirm_close(self):
+    def confirm_close(self) -> bool:
         return all(
             self.changes_guard.confirm(changes, return_label="Cancel")
             for changes in self.editable_pages.values()
         )
 
-    def request_close(self):
+    def request_close(self) -> None:
         if self.confirm_close():
             self.context.callbacks.on_close()
