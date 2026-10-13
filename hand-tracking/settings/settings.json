@@ -11,5 +11,22 @@
     76.8,
     88.8
   ],
-  "finger_deviation_calculation": "default"
+  "finger_deviation_calculation": "default",
+  "hand_landmarker_model_path": "C:\\Users\\mjabr\\Dev\\Learn\\ComputerVisionBasics\\hand-tracking\\tasks\\hand_landmarker.task",
+  "optimistic_tracking": {
+    "enabled": true,
+    "lookback_seconds": 2.0,
+    "movement": {
+      "initial_displacement": 0.03,
+      "distance_threshold": 0.09,
+      "min_interval_seconds": 0.05,
+      "max_repeats": 2,
+      "axis_weights": {
+        "x": 1.0,
+        "y": 1.0,
+        "z": 0.0
+      },
+      "buffer_credit": 0.0
+    }
+  }
 }

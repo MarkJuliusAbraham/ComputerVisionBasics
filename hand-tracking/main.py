@@ -25,7 +25,7 @@ def main():
         with ExitStack() as startup:
             camera = Camera()
             startup.callback(camera.release)
-            tracker = HandTracker()
+            tracker = HandTracker(model_path=settings.data.hand_landmarker_model_path)
             startup.callback(tracker.close)
             drawer = HandDrawer()
             debug_overlay = DebugOverlay()

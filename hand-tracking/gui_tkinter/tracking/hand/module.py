@@ -25,11 +25,11 @@ class HandTrackingModule:
     name = "Hand tracking"
     description = "Live hand and gesture data, detection settings, and command mappings."
 
-    def __init__(self, settings, actions):
+    def __init__(self, settings, actions, *, model_asset=None):
         self.settings = settings
         self.actions = actions
-        self.debug = HandDebugPanel()
-        self.settings_panel = HandSettingsPanel(on_apply=actions.apply_settings)
+        self.debug = HandDebugPanel(on_open_settings=self.open_settings)
+        self.settings_panel = HandSettingsPanel(on_apply=actions.apply_settings, model_asset=model_asset)
         self.mapping = MappingPanel(
             on_saved=actions.apply_mapping, segment_count=settings.data.finger_segment_count,
         )
@@ -50,6 +50,10 @@ class HandTrackingModule:
             self.window = TrackingWindow(parent, context, self.name)
         self.window.show()
 
+    def open_settings(self):
+        if self.window is not None:
+            self.window.show_settings()
+
     @property
     def preview_active(self):
         return (
@@ -60,6 +64,10 @@ class HandTrackingModule:
     def update_data(self, records, enabled, paused):
         self.debug.update_gesture_display(records, enabled, paused)
         self.settings_panel.set_preview_data(self.debug.preview_fingers, self.debug.preview_status)
+
+    def set_model_status(self, status):
+        self.debug.set_model_status(status)
+        self.settings_panel.set_model_status(status)
 
     def synchronize(self, settings, changed_fields):
         self.debug.set_display(settings.data.theme, settings.data.finger_classification_thresholds[-1])

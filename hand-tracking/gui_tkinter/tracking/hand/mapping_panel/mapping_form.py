@@ -16,7 +16,7 @@ class MappingForm(ttk.Frame):
     def __init__(
         self, master, *, on_change=None, on_select=None, on_manage=None,
         on_choose_profile=None, on_edit_reset=None, on_save=None, on_discard=None,
-        on_rename=None, on_delete=None,
+        on_rename=None, on_delete=None, on_repeat_change=None,
         segment_count=4,
     ):
         super().__init__(master)
@@ -44,6 +44,7 @@ class MappingForm(ttk.Frame):
         self.scroll.grid(row=0, column=1, sticky="nsew")
         self.editor = GestureEditorSection(
             self.scroll.content, self.appearance, on_change, segment_count,
+            on_repeat_change=on_repeat_change,
         )
         self.editor.pack(fill="x", padx=(0, self.appearance.pixels(8)))
         self._refresh_layout()
@@ -74,6 +75,12 @@ class MappingForm(ttk.Frame):
 
     def values(self):
         return self.editor.values()
+
+    def repeat_values(self):
+        return self.editor.repeats.values()
+
+    def applies_repeats_to_all(self):
+        return self.editor.repeats.apply_to_all.get()
 
     def load_draft(self, draft):
         self.editor.load(draft)

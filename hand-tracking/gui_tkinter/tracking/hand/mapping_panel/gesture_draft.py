@@ -1,4 +1,4 @@
-"""Portable editing data for a gesture's criteria and command sequence."""
+"""Portable editing data for a gesture's criteria, tracking, commands, and repeats."""
 
 from dataclasses import dataclass, replace
 
@@ -8,6 +8,9 @@ from gestures.gesture_config import (
     GestureDefinition,
     GestureMatch,
 )
+from gestures.tracking.settings import GestureTrackingSettings
+
+from gui_tkinter.components.movement_draft import MovementSettingsDraft
 
 
 @dataclass(frozen=True)
@@ -17,6 +20,9 @@ class GestureDraft:
     criteria: GestureMatch
     commands: str
     delay: str
+    tracking: GestureTrackingSettings = GestureTrackingSettings()
+    repeat: MovementSettingsDraft = MovementSettingsDraft.defaults()
+    use_optimistic_tracking: bool = True
 
     @classmethod
     def from_definition(cls, definition: GestureDefinition):
@@ -24,6 +30,9 @@ class GestureDraft:
             criteria=definition.match,
             commands=", ".join(step.value for step in definition.commands.steps),
             delay=str(definition.commands.delay_ms_between_steps),
+            tracking=definition.tracking,
+            repeat=MovementSettingsDraft.from_settings(definition.repeat_settings),
+            use_optimistic_tracking=definition.use_optimistic_tracking,
         )
 
     def to_definition(self, definition: GestureDefinition):
@@ -43,5 +52,12 @@ class GestureDraft:
             steps=tuple(CommandStep(type="key_tap", value=value) for value in command_values),
             delay_ms_between_steps=delay,
         )
-        # Replacing only editable fields retains tracking and repeat metadata.
-        return replace(definition, match=self.criteria, commands=sequence)
+        try:
+            repeat_settings = self.repeat.to_settings()
+        except ValueError as error:
+            raise ValueError(f"{definition.name}: {error}") from error
+        return replace(
+            definition, match=self.criteria, commands=sequence, tracking=self.tracking,
+            repeat_settings=repeat_settings,
+            use_optimistic_tracking=self.use_optimistic_tracking,
+        )

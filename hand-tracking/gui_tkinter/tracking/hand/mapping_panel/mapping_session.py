@@ -13,11 +13,13 @@ from gestures.gesture_config import (
     GestureConfig,
     GestureDefinition,
     GestureMatch,
+    RepeatSettings,
 )
 from gestures.profile_manager import GestureProfileManager
 from gestures.gesture_validation import GestureCriteriaValidator
 
 from .gesture_draft import GestureDraft
+from gui_tkinter.components.movement_draft import MovementSettingsDraft
 
 
 class MappingSession:
@@ -49,7 +51,10 @@ class MappingSession:
 
     @property
     def is_dirty(self):
-        return self.drafts != self._baseline or self.reset_draft != self.config.reset_match
+        return (
+            self.drafts != self._baseline or self.reset_draft != self.config.reset_match
+            or self.repeat_defaults != self._repeat_baseline
+        )
 
     @property
     def validation_report(self):
@@ -67,6 +72,8 @@ class MappingSession:
         }
         self._baseline = deepcopy(self.drafts)
         self.reset_draft = config.reset_match
+        self.repeat_defaults = MovementSettingsDraft.from_settings(config.repeat_settings)
+        self._repeat_baseline = self.repeat_defaults
 
     def update_draft(self, gesture_id, draft):
         if gesture_id not in self.drafts:
@@ -76,6 +83,14 @@ class MappingSession:
     def discard(self):
         self.drafts = deepcopy(self._baseline)
         self.reset_draft = self.config.reset_match
+        self.repeat_defaults = self._repeat_baseline
+
+    def apply_repeats_to_all(self, repeat):
+        self.drafts = {
+            gesture_id: replace(draft, repeat=repeat)
+            for gesture_id, draft in self.drafts.items()
+        }
+        self.repeat_defaults = repeat
 
     def update_reset(self, match):
         self.reset_draft = match
@@ -87,6 +102,7 @@ class MappingSession:
         )
         updated = replace(
             self.config, definitions=definitions, reset_match=self.reset_draft,
+            repeat_settings=self.repeat_defaults.to_settings(),
         )
         # Use the profile parser for criteria, conflicts, and command validation.
         return GestureConfig.from_dict(updated.to_dict())
@@ -136,7 +152,12 @@ class MappingSession:
         new_baseline = {}
         for definition in updated.definitions:
             default = GestureDraft.from_definition(definition)
-            new_drafts[definition.id] = self.drafts.get(definition.id, default)
+            pending_default = default
+            if definition.id not in self.drafts and self.repeat_defaults != self._repeat_baseline:
+                # Newly created gestures inherit pending shared repeat edits
+                # without committing those edits through Manage gestures.
+                pending_default = replace(default, repeat=self.repeat_defaults)
+            new_drafts[definition.id] = self.drafts.get(definition.id, pending_default)
             new_baseline[definition.id] = self._baseline.get(definition.id, default)
         self.config = updated
         self.drafts = new_drafts
@@ -144,7 +165,9 @@ class MappingSession:
         return updated
 
     @staticmethod
-    def create_gesture(current_definitions, segment_count=4, reset_match=None):
+    def create_gesture(
+        current_definitions, segment_count=4, reset_match=None, *, repeat_settings=None,
+    ):
         """Choose an unused pattern for a newly managed gesture."""
         fingers = tuple(FINGERS)
         positions = tuple(category.value for category in finger_categories(segment_count))
@@ -180,4 +203,5 @@ class MappingSession:
             name="New Gesture",
             match=match,
             commands=CommandSequence((CommandStep(type="key_tap", value="a"),)),
+            repeat_settings=repeat_settings if repeat_settings is not None else RepeatSettings(),
         )

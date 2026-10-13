@@ -1,18 +1,19 @@
 import json
-import math
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from gestures.finger_classifier import FINGER_POSITIONS
+from gestures.finger_classifier import FINGER_POSITIONS, FINGERS
 from gestures.palm_detector import PalmPosition
 from gestures.gesture_validation import GestureCriteriaValidator
+from gestures.repeating.settings import RepeatSettings
+from gestures.tracking.settings import GestureTrackingSettings
 
 
 DEFAULT_GESTURE_PROFILE_DIR = Path(__file__).resolve().parents[1] / "gesture_profiles"
 DEFAULT_GESTURE_CONFIG = DEFAULT_GESTURE_PROFILE_DIR / "invoker_profile.json"
 DEFAULT_GESTURE_TEMPLATE = Path(__file__).with_name("default_gesture_profile.json")
-FINGER_NAMES = {"thumb", "index", "middle", "ring", "pinky"}
+FINGER_NAMES = set(FINGERS)
 PALM_POSITIONS = {position.value for position in PalmPosition}
 
 
@@ -113,8 +114,9 @@ class GestureDefinition:
     name: str
     match: GestureMatch
     commands: CommandSequence
-    repeat_fingers: tuple[str, ...] = ()
-    tracked_finger: str | None = None
+    tracking: GestureTrackingSettings = GestureTrackingSettings()
+    repeat_settings: RepeatSettings = RepeatSettings()
+    use_optimistic_tracking: bool = True
 
     def to_dict(self):
         result = {
@@ -122,66 +124,11 @@ class GestureDefinition:
             "name": self.name,
             "match": self.match.to_dict(),
             "commands": self.commands.to_dict(),
-            "tracked_finger": self.tracked_finger,
+            "tracking": self.tracking.to_dict(),
+            "repeat_settings": self.repeat_settings.to_dict(),
+            "use_optimistic_tracking": self.use_optimistic_tracking,
         }
-        if self.repeat_fingers:
-            result["repeat_fingers"] = list(self.repeat_fingers)
         return result
-
-
-@dataclass(frozen=True)
-class RepeatSettings:
-    initial_displacement: float = 0.03
-    distance_threshold: float = 0.09
-    min_interval_seconds: float = 0.05
-    max_repeats: int = 2
-
-    def to_dict(self):
-        return {
-            "initial_displacement": self.initial_displacement,
-            "distance_threshold": self.distance_threshold,
-            "min_interval_seconds": self.min_interval_seconds,
-            "max_repeats": self.max_repeats,
-        }
-
-    @classmethod
-    def from_dict(cls, value):
-        if value is None:
-            return cls()
-        if not isinstance(value, dict):
-            raise ValueError("repeat_settings must be an object")
-        defaults = cls()
-        settings = cls(
-            initial_displacement=value.get(
-                "initial_displacement", defaults.initial_displacement
-            ),
-            distance_threshold=value.get("distance_threshold", defaults.distance_threshold),
-            min_interval_seconds=value.get("min_interval_seconds", defaults.min_interval_seconds),
-            max_repeats=value.get("max_repeats", defaults.max_repeats),
-        )
-        numeric = (
-            settings.initial_displacement, settings.distance_threshold,
-            settings.min_interval_seconds,
-        )
-        if any(not isinstance(number, (int, float)) or isinstance(number, bool)
-               for number in numeric):
-            raise ValueError(
-                "Initial displacement, repeat distance, and interval must be numbers"
-            )
-        if any(not math.isfinite(number) for number in numeric):
-            raise ValueError("Repeat values must be finite numbers")
-        if (
-            settings.initial_displacement < 0
-            or settings.distance_threshold <= 0
-            or settings.min_interval_seconds < 0
-        ):
-            raise ValueError(
-                "Initial displacement and interval must be non-negative; "
-                "repeat distance must be positive"
-            )
-        if not isinstance(settings.max_repeats, int) or isinstance(settings.max_repeats, bool) or settings.max_repeats < 0:
-            raise ValueError("max_repeats must be a non-negative integer")
-        return settings
 
 
 @dataclass(frozen=True)
@@ -234,6 +181,7 @@ class GestureConfig:
         if not isinstance(raw_definitions, list) or not raw_definitions:
             raise ValueError("Gesture config must define at least one gesture")
 
+        repeat_defaults = RepeatSettings.from_dict(raw.get("repeat_settings"))
         definitions = []
         ids = set()
         for index, item in enumerate(raw_definitions):
@@ -260,18 +208,10 @@ class GestureConfig:
             if len(set(repeat_fingers)) != len(repeat_fingers):
                 raise ValueError(f"{location}.repeat_fingers cannot contain duplicates")
 
-            tracked_finger = (
-                item["tracked_finger"]
-                if "tracked_finger" in item
-                else (repeat_fingers[0] if repeat_fingers else "index")
-            )
-            if tracked_finger is not None and (
-                not isinstance(tracked_finger, str)
-                or tracked_finger not in FINGER_NAMES
-            ):
-                raise ValueError(
-                    f"{location}.tracked_finger must be one of {sorted(FINGER_NAMES)}"
-                )
+            tracking = GestureTrackingSettings.from_gesture(item, location, repeat_fingers)
+            use_optimistic = item.get("use_optimistic_tracking", True)
+            if not isinstance(use_optimistic, bool):
+                raise ValueError(f"{location}.use_optimistic_tracking must be a boolean")
 
             definitions.append(GestureDefinition(
                 id=gesture_id,
@@ -280,8 +220,11 @@ class GestureConfig:
                 commands=CommandSequence.from_dict(
                     item.get("commands"), f"{location}.commands"
                 ),
-                repeat_fingers=tuple(repeat_fingers),
-                tracked_finger=tracked_finger,
+                tracking=tracking,
+                use_optimistic_tracking=use_optimistic,
+                repeat_settings=RepeatSettings.from_dict(
+                    item.get("repeat_settings", repeat_defaults.to_dict())
+                ),
             ))
 
         reset_match = GestureMatch.from_dict(raw.get("reset_match"), "reset_match")
@@ -289,7 +232,7 @@ class GestureConfig:
             cls._validate_no_conflicts(definitions, reset_match)
         return cls(
             tuple(definitions), reset_match,
-            RepeatSettings.from_dict(raw.get("repeat_settings")),
+            repeat_defaults,
         )
 
     @staticmethod

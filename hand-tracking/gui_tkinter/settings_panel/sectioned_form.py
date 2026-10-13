@@ -16,9 +16,12 @@ class SectionedSettingsForm(ttk.Frame):
         self.status_var = tk.StringVar(self)
         self.validation_error = tk.StringVar(self)
 
-    def add_section(self, name, section):
+    def add_section(self, name, section, **grid_options):
         self.sections[name] = section
-        section.pack(fill="x", pady=(0, 16))
+        if grid_options:
+            section.grid(sticky="new", **grid_options)
+        else:
+            section.pack(fill="x", pady=(0, 16))
         self.variables.update(getattr(section, "variables", {}))
 
     def notify_change(self):
@@ -30,6 +33,14 @@ class SectionedSettingsForm(ttk.Frame):
         for section in self.sections.values():
             if hasattr(section, "values"):
                 values.update(section.values())
+        return values
+
+    def draft_values(self):
+        values = {}
+        for section in self.sections.values():
+            getter = getattr(section, "draft_values", None) or getattr(section, "values", None)
+            if getter is not None:
+                values.update(getter())
         return values
 
     def load_data(self, data):

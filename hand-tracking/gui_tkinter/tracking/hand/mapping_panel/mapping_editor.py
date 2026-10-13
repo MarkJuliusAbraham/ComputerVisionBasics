@@ -25,6 +25,7 @@ class MappingEditor(ttk.Frame):
         self.form = MappingForm(
             self,
             on_change=self._editor_changed,
+            on_repeat_change=self._repeat_changed,
             on_select=self._selection_changed,
             on_manage=self.gesture_management.manage,
             on_rename=self.gesture_management.rename,
@@ -68,6 +69,12 @@ class MappingEditor(ttk.Frame):
 
     def _editor_changed(self):
         self._capture_draft()
+        self._refresh_feedback()
+
+    def _repeat_changed(self):
+        self._capture_draft()
+        if self.form.applies_repeats_to_all():
+            self.session.apply_repeats_to_all(self.form.repeat_values())
         self._refresh_feedback()
 
     def _selection_changed(self, gesture_id):

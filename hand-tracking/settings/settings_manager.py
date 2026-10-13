@@ -4,6 +4,9 @@ from copy import deepcopy
 from dataclasses import asdict, dataclass, field, replace
 from typing import Callable
 
+from landmarker import DEFAULT_MODEL_PATH
+from gestures.optimistic.settings import OptimisticTrackingSettings
+
 from gestures.finger_classifier import (
     FINGER_CATEGORIES_BY_COUNT,
     FingerClassifier,
@@ -57,6 +60,9 @@ class SettingsData:
         default_factory=lambda: default_finger_thresholds(4)
     )
     finger_deviation_calculation: str = "default"
+    hand_landmarker_model_path: str = DEFAULT_MODEL_PATH
+    optimistic_tracking: OptimisticTrackingSettings = field(default_factory=OptimisticTrackingSettings)
+
     def to_dict(self):
         return asdict(self)
 
@@ -65,6 +71,12 @@ class SettingsData:
         fields = cls.__dataclass_fields__
         data = {key: value for key, value in values.items() if key in fields}
         defaults = cls()
+        try:
+            data["optimistic_tracking"] = OptimisticTrackingSettings.from_dict(data.get("optimistic_tracking"))
+        except ValueError:
+            data["optimistic_tracking"] = defaults.optimistic_tracking
+        if not isinstance(data.get("hand_landmarker_model_path", defaults.hand_landmarker_model_path), str):
+            data["hand_landmarker_model_path"] = defaults.hand_landmarker_model_path
         data["theme"] = resolve_theme(data.get("theme", defaults.theme)).name
         try:
             segment_count = int(data.get("finger_segment_count", 0))
@@ -158,6 +170,8 @@ class SettingsScope:
 def _validate_hand_settings(data):
     if not data.has_valid_finger_thresholds():
         return "Thresholds must be strictly increasing between 0° and 120°."
+    if not isinstance(data.optimistic_tracking, OptimisticTrackingSettings):
+        return "Enter valid Optimistic Tracking values."
     return ""
 
 
@@ -165,6 +179,8 @@ SHARED_SETTINGS_SCOPE = SettingsScope("Application", ("profile", "theme", "ui_sc
 HAND_SETTINGS_SCOPE = SettingsScope("Hand tracking", (
     "track_hands", "finger_segment_count", "finger_classification_thresholds",
     "finger_deviation_calculation",
+    "hand_landmarker_model_path",
+    "optimistic_tracking",
 ), validator=_validate_hand_settings)
 
 
@@ -225,6 +241,8 @@ class Settings:
                 raise ValueError(f"Invalid {key}: choose one of {', '.join(allowed)}")
         if not updated.has_valid_finger_thresholds():
             raise ValueError("Finger thresholds must be increasing")
+        if not isinstance(updated.optimistic_tracking, OptimisticTrackingSettings):
+            raise ValueError("Optimistic Tracking settings must be valid")
         previous = self.data
         self.data = updated
         try:

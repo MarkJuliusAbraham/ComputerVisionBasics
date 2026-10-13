@@ -1,6 +1,7 @@
 from tkinter import ttk
 
 from .live_gesture_section import LiveGestureSection
+from .model_status_section import ModelStatusSection
 
 
 class HandDebugTab(ttk.Frame):
@@ -14,6 +15,7 @@ class HandDebugTab(ttk.Frame):
         on_toggle_tracking=None,
         theme_name="Light",
         max_deviation=75.0,
+        on_open_settings=None,
     ):
         super().__init__(master)
         self.on_toggle_tracking = on_toggle_tracking
@@ -34,6 +36,9 @@ class HandDebugTab(ttk.Frame):
             width=24,
         )
         self.pause_tracking_button.pack(anchor="center", pady=(0, 4))
+
+        self.model_status = ModelStatusSection(self, on_open_settings=on_open_settings)
+        self.model_status.pack(fill="x", padx=20, pady=(8, 0))
 
         self.live_gestures = LiveGestureSection(
             self, theme_name=theme_name, max_deviation=max_deviation,

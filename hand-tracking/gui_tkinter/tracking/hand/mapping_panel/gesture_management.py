@@ -24,6 +24,7 @@ class GestureManagementActions:
     def _create(self, definitions):
         return self.session.create_gesture(
             definitions, self.segment_count(), self.session.config.reset_match,
+            repeat_settings=self.session.config.repeat_settings,
         )
 
     def rename(self, gesture_id):

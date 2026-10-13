@@ -2,12 +2,14 @@
 
 from .finger_classifier import FingerClassifier, FingerState, FingerPosition
 from .palm_detector import PalmDetector, PalmPosition
+from .tracking.path import Point
 
 
 @dataclass(frozen=True)
 class GestureState:
     palm: PalmPosition
     fingers: dict[str, FingerState]
+    wrist: Point | None = None
 
     @property
     def fingers_up(self) -> int:
@@ -39,5 +41,6 @@ class Detector:
         state = GestureState(
             palm=palm,
             fingers=fingers,
+            wrist=(hand[0].x, hand[0].y, hand[0].z),
         )
         return state

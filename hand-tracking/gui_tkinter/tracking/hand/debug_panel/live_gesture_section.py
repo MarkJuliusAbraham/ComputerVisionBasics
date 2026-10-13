@@ -33,9 +33,11 @@ class LiveGestureSection(ttk.LabelFrame):
             )
             self.hand_panels[handedness] = panel
 
-    def update_data(self, hand_states, enabled=True, paused=False):
+    def update_data(self, hand_states, enabled=True, paused=False, status_override=""):
         if not enabled:
             self.tracking_status.set("Tracking disabled")
+        elif status_override:
+            self.tracking_status.set(status_override)
         elif paused:
             self.tracking_status.set("Tracking paused")
         else:
@@ -45,6 +47,7 @@ class LiveGestureSection(ttk.LabelFrame):
         self._preview_fingers = preview["state"].fingers if preview else None
         self._preview_status = (
             "Tracking disabled" if not enabled else
+            status_override if status_override else
             "Tracking paused" if paused else
             "No hand detected" if preview is None else
             f"Live data · {preview['handedness']} hand"

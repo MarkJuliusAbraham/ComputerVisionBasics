@@ -29,10 +29,16 @@
     }
   },
   "repeat_settings": {
-    "initial_displacement": 0.029999999329447746,
-    "distance_threshold": 0.05999999865889549,
+    "initial_displacement": 0.09,
+    "distance_threshold": 0.06,
     "min_interval_seconds": 0.02,
-    "max_repeats": 2
+    "max_repeats": 2,
+    "axis_weights": {
+      "x": 1.0,
+      "y": 0.0,
+      "z": 0.0
+    },
+    "buffer_credit": 0.8
   },
   "gestures": [
     {
@@ -64,7 +70,21 @@
         ],
         "delay_ms_between_steps": 0
       },
-      "tracked_finger": null
+      "tracking": {
+        "fingers": []
+      },
+      "repeat_settings": {
+        "initial_displacement": 0.09,
+        "distance_threshold": 0.06,
+        "min_interval_seconds": 0.02,
+        "max_repeats": 2,
+        "axis_weights": {
+          "x": 1.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "buffer_credit": 0.8
+      }
     },
     {
       "id": "q",
@@ -101,11 +121,24 @@
         ],
         "delay_ms_between_steps": 0
       },
-      "tracked_finger": "middle",
-      "repeat_fingers": [
-        "index",
-        "middle"
-      ]
+      "tracking": {
+        "fingers": [
+          "index",
+          "middle"
+        ]
+      },
+      "repeat_settings": {
+        "initial_displacement": 0.09,
+        "distance_threshold": 0.06,
+        "min_interval_seconds": 0.02,
+        "max_repeats": 2,
+        "axis_weights": {
+          "x": 1.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "buffer_credit": 0.8
+      }
     },
     {
       "id": "w",
@@ -114,12 +147,15 @@
         "fingers": {
           "index": [
             "closed",
+            "curled",
             "nearly_closed",
             "very_curled"
           ],
           "middle": [
-            "partial",
-            "straight"
+            "closed",
+            "curled",
+            "nearly_closed",
+            "very_curled"
           ],
           "ring": [
             "partial",
@@ -141,11 +177,23 @@
         ],
         "delay_ms_between_steps": 0
       },
-      "tracked_finger": "ring",
-      "repeat_fingers": [
-        "middle",
-        "ring"
-      ]
+      "tracking": {
+        "fingers": [
+          "ring"
+        ]
+      },
+      "repeat_settings": {
+        "initial_displacement": 0.09,
+        "distance_threshold": 0.06,
+        "min_interval_seconds": 0.02,
+        "max_repeats": 2,
+        "axis_weights": {
+          "x": 1.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "buffer_credit": 0.8
+      }
     },
     {
       "id": "e",
@@ -184,10 +232,23 @@
         ],
         "delay_ms_between_steps": 0
       },
-      "tracked_finger": "index",
-      "repeat_fingers": [
-        "index"
-      ]
+      "tracking": {
+        "fingers": [
+          "index"
+        ]
+      },
+      "repeat_settings": {
+        "initial_displacement": 0.09,
+        "distance_threshold": 0.06,
+        "min_interval_seconds": 0.02,
+        "max_repeats": 2,
+        "axis_weights": {
+          "x": 1.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "buffer_credit": 0.8
+      }
     },
     {
       "id": "d",
@@ -222,7 +283,23 @@
         ],
         "delay_ms_between_steps": 0
       },
-      "tracked_finger": "index"
+      "tracking": {
+        "fingers": [
+          "index"
+        ]
+      },
+      "repeat_settings": {
+        "initial_displacement": 0.09,
+        "distance_threshold": 0.06,
+        "min_interval_seconds": 0.02,
+        "max_repeats": 2,
+        "axis_weights": {
+          "x": 1.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "buffer_credit": 0.8
+      }
     },
     {
       "id": "f",
@@ -255,7 +332,23 @@
         ],
         "delay_ms_between_steps": 0
       },
-      "tracked_finger": "index"
+      "tracking": {
+        "fingers": [
+          "index"
+        ]
+      },
+      "repeat_settings": {
+        "initial_displacement": 0.09,
+        "distance_threshold": 0.06,
+        "min_interval_seconds": 0.02,
+        "max_repeats": 2,
+        "axis_weights": {
+          "x": 1.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "buffer_credit": 0.8
+      }
     }
   ]
 }

@@ -29,6 +29,9 @@ class TrackingWindow:
         self.shell.view.root.withdraw()
         self.shell.lifecycle.notify_activity()
 
+    def show_settings(self):
+        self.shell.view.notebook.select(self.shell.view.settings_tab)
+
     def request_close(self):
         self.shell.lifecycle.request_close()
 

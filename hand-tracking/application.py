@@ -51,6 +51,7 @@ class Application:
         self.tracking_paused = False
         self._tracking_tab_active = False
         self._camera_ui_state = None
+        self._model_ui_state = None
         self._gesture_display_updated = 0.0
         self._gesture_display_snapshot = None
         self._latest_hand_states = []
@@ -62,6 +63,7 @@ class Application:
                 apply_settings=self.apply_changes,
                 apply_mapping=self.apply_gesture_config,
             ),
+            model_asset=self.tracker.asset,
         )
         tracking_modules = TrackingWindowRegistry((self.hand_tracking,))
         panels = PanelSet(main=MainPanel(tracking_modules), settings=SettingsPanel())
@@ -87,6 +89,8 @@ class Application:
         """Copy values from the settings object onto the app."""
         previously_enabled = self.track_hands
         self.detector.configure(self.settings.data)
+        self.gesture_handler.configure_optimistic(self.settings.data.optimistic_tracking)
+        self.tracker.request_model(self.settings.data.hand_landmarker_model_path)
         self.track_hands = self.settings.data.track_hands
         if previously_enabled and not self.track_hands:
             self.gesture_handler.suspend()
@@ -108,6 +112,9 @@ class Application:
 
     def apply_changes(self, values):
         """Apply only the fields owned by the settings panel that submitted them."""
+        model_path = values.get("hand_landmarker_model_path")
+        if model_path and model_path != self.settings.data.hand_landmarker_model_path:
+            self.tracker.asset.validate_path(model_path)
         data = self.settings.update_fields(values)
         self.apply_settings()
         self.gui.apply_display(data)
@@ -131,6 +138,7 @@ class Application:
         """Reset the hand pipeline without rebuilding windows or the shared camera."""
         if not self.running:
             return
+        self.tracker.request_model(self.settings.data.hand_landmarker_model_path, force=True)
         self.gesture_handler.configure(self.gesture_handler.config)
         self._latest_hand_states = []
         self._gesture_display_updated = 0.0
@@ -190,9 +198,17 @@ class Application:
 
     def _process_frame_work(self):
         """Run and measure the work for one event-loop frame."""
+        model_status = self.tracker.model_status
+        if model_status != self._model_ui_state:
+            self.hand_tracking.set_model_status(model_status)
+            self.gesture_handler.suspend()
+            self._latest_hand_states = []
+            self._gesture_display_snapshot = None
+            self._model_ui_state = model_status
         with self.frame_profiler.measure("commands.update"):
             self.gesture_handler.update(
-                allow_repeats=self.track_hands and not self.tracking_paused and self._tracking_tab_active
+                allow_repeats=model_status.can_detect and self.track_hands
+                and not self.tracking_paused and self._tracking_tab_active
             )
 
         with self.frame_profiler.measure("camera.status"):
@@ -207,13 +223,17 @@ class Application:
             # A failed device should leave the controls available for choosing
             # another camera rather than terminating the whole application.
             self._latest_hand_states = []
+            self.gesture_handler.finish_frame(set())
             self._refresh_gesture_display()
             self.preview.show(None)
             self.gui.after(10, self._process_frame)
             return
 
         preview_active = self.hand_tracking.preview_active
-        if self.track_hands and not self.tracking_paused and (self._tracking_tab_active or preview_active):
+        if (
+            model_status.can_detect and self.track_hands and not self.tracking_paused
+            and (self._tracking_tab_active or preview_active)
+        ):
             with self.frame_profiler.measure("tracker.prepare_submit"):
                 tracking = self.tracker.detect(frame)
             with self.frame_profiler.measure("landmarks.draw"):
@@ -230,7 +250,7 @@ class Application:
             self._latest_hand_states = []
 
         with self.frame_profiler.measure("gesture_path.draw"):
-            self.gesture_path_overlay.draw(frame, self.gesture_handler.drawing_path)
+            self.gesture_path_overlay.draw(frame, self.gesture_handler.drawing_paths)
 
         self._refresh_gesture_display()
 
@@ -288,6 +308,9 @@ class Application:
                 "state": state,
                 "gesture": gesture,
             })
+        self.gesture_handler.finish_frame(
+            {record["handedness"] for record in hand_states}, invoke_commands=invoke_commands,
+        )
         return hand_states
 
 

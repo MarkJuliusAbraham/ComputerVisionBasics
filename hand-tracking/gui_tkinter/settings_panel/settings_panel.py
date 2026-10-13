@@ -21,6 +21,7 @@ class SettingsPanel:
         self.scope = scope
         self.form_factory = form_factory
         self._baseline = SettingsData()
+        self._form_baseline = {}
         self.form = None
 
     def build(self, parent, settings):
@@ -55,7 +56,7 @@ class SettingsPanel:
     def is_dirty(self):
         return (
             self.form is not None
-            and self.scope.values(self.get_values()) != self.scope.values(self._baseline)
+            and self.form.draft_values() != self._form_baseline
         )
 
     def _refresh_apply_state(self):
@@ -69,6 +70,7 @@ class SettingsPanel:
         self._baseline = deepcopy(settings.data)
         if self.form is not None:
             self.form.load(settings)
+            self._form_baseline = deepcopy(self.form.draft_values())
             self.form.status_var.set(f"{self.scope.name} settings loaded")
             self._refresh_apply_state()
 
@@ -82,7 +84,11 @@ class SettingsPanel:
             self._refresh_apply_state()
 
     def apply(self):
-        data = self.get_values()
+        try:
+            data = self.get_values()
+        except ValueError as error:
+            self.form.validation_error.set(str(error))
+            return False
         error = self.scope.validation_error(data)
         self.form.validation_error.set(error)
         if error:
@@ -95,6 +101,7 @@ class SettingsPanel:
         if result is False:
             return False
         self._baseline = deepcopy(result if isinstance(result, SettingsData) else data)
+        self._form_baseline = deepcopy(self.form.draft_values())
         self._refresh_apply_state()
         self.form.status_var.set(f"{self.scope.name} settings applied and saved")
         return True
@@ -102,6 +109,7 @@ class SettingsPanel:
     def discard(self):
         if self.form is not None:
             self.form.load_data(self._baseline)
+            self._form_baseline = deepcopy(self.form.draft_values())
             self.form.status_var.set("Unsaved settings discarded")
             self._refresh_apply_state()
 
