@@ -1,6 +1,6 @@
 """Hand-specific detection controls."""
 
-from gui_tkinter.settings_panel.sections import FieldSection, FieldSpec
+from gui_tkinter.components.field_section import FieldSection, FieldSpec
 
 from .deviation_settings import DeviationSettings
 
@@ -13,13 +13,16 @@ class TrackingSection(FieldSection):
                       options=("default", "prototype")),
         ), on_change)
         self.deviation = DeviationSettings(
-            self, theme_name, max_deviation, on_change=self._notify_change,
+            self, theme_name, max_deviation, on_change=self.changes.emit,
         )
         self.deviation.pack(fill="x")
         self.variables.update(self.deviation.variables)
 
     def values(self):
         return {**super().values(), **self.deviation.values()}
+
+    def draft_values(self):
+        return {**super().draft_values(), **self.deviation.values()}
 
     def load(self, data):
         self.load_values({

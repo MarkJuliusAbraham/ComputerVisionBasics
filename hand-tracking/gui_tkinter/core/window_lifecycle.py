@@ -1,6 +1,7 @@
 """Visibility, tab transitions, and unsaved changes for any panel window."""
 
 from .unsaved_changes_guard import PendingChanges, UnsavedChangesGuard
+from .idle_refresh import IdleRefresh
 
 
 class WindowLifecycleController:
@@ -8,6 +9,8 @@ class WindowLifecycleController:
         self.view = view
         self.context = context
         self._notified_active = None
+        self.activity_refresh = IdleRefresh(view.root, self.notify_activity)
+        self.focus_refresh = IdleRefresh(view.root, self._clear_page_focus)
         self.changes_guard = (
             changes_guard if changes_guard is not None else UnsavedChangesGuard(view.root)
         )
@@ -30,7 +33,7 @@ class WindowLifecycleController:
         self.view.root.protocol("WM_DELETE_WINDOW", self.request_close)
         self.view.root.bind("<Map>", self._visibility_changed, add="+")
         self.view.root.bind("<Unmap>", self._visibility_changed, add="+")
-        self.view.root.after_idle(self.notify_activity)
+        self.activity_refresh.schedule()
 
     def _before_tab_change(self, current_tab, _target_tab):
         changes = self.editable_pages.get(current_tab)
@@ -39,7 +42,7 @@ class WindowLifecycleController:
     def _on_tab_changed(self, _event):
         self.view.current_tab = self.view.notebook.select()
         self.notify_activity()
-        self.view.root.after_idle(self._clear_page_focus)
+        self.focus_refresh.schedule()
 
     def _clear_page_focus(self):
         """Clear an auto-focused page input without activating another window."""
@@ -54,7 +57,7 @@ class WindowLifecycleController:
 
     def _visibility_changed(self, event):
         if event.widget is self.view.root:
-            self.view.root.after_idle(self.notify_activity)
+            self.activity_refresh.schedule()
 
     def page_visible(self, page):
         return bool(self.view.root.winfo_viewable()) and self.view.notebook.select() == str(page)

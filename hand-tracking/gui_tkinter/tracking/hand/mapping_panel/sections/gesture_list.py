@@ -1,5 +1,6 @@
 """Fixed-width gesture browser and related management actions."""
 
+from gui_tkinter.core.idle_refresh import IdleRefresh
 from tkinter import ttk
 
 from ..display_names import gesture_display_names
@@ -55,7 +56,7 @@ class GestureListSection(ttk.Frame):
             row=5, column=0, columnspan=2, sticky="ew", pady=(appearance.pixels(8), 0),
         )
         self._refresh_layout()
-        self.bind("<<ThemeChanged>>", lambda _event: self.after_idle(self._refresh_layout))
+        self.theme_refresh = IdleRefresh(self, self._refresh_layout, event="<<ThemeChanged>>")
 
     def _refresh_layout(self):
         self.appearance.refresh()
@@ -117,7 +118,7 @@ class GestureListSection(ttk.Frame):
             self._invalid_ids = invalid_ids
             for gesture_id in self.list.get_children():
                 self.list.item(gesture_id, tags=("invalid",) if gesture_id in invalid_ids else ())
-        self._refresh_layout()
+            self._refresh_layout()
 
     def display_name(self, gesture_id):
         return self._names.get(gesture_id)

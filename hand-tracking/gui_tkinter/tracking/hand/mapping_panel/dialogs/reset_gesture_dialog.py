@@ -1,11 +1,10 @@
 """Stage profile-wide reset criteria without saving the profile implicitly."""
 
-import tkinter as tk
 from tkinter import ttk
 
 from gui_tkinter.components.scrollable_frame import ScrollableFrame
 from gui_tkinter.components.theme import ThemeMetrics
-from gui_tkinter.core.window_geometry import WindowGeometry
+from gui_tkinter.core.modal_dialog import ModalDialog
 
 from ..sections.reset_gesture import ResetGestureSection
 
@@ -18,10 +17,8 @@ class ResetGestureDialog:
         self.on_use_changes = on_use_changes
 
     def show(self):
-        self.window = tk.Toplevel(self.parent)
-        self.window.withdraw()
-        self.window.title("Edit universal reset")
-        self.window.transient(self.parent)
+        self.modal = ModalDialog(self.parent, "Edit universal reset", base_size=(900, 700))
+        self.window = self.modal.window
         appearance = ThemeMetrics(self.window)
         footer = ttk.Frame(self.window, padding=appearance.pixels(16))
         footer.pack(side="bottom", fill="x")
@@ -38,15 +35,7 @@ class ResetGestureDialog:
         self.section = ResetGestureSection(scroll.content, segment_count=self.segment_count)
         self.section.pack(fill="x")
         self.section.load(self.match)
-        geometry = WindowGeometry(self.window, (900, 700))
-        geometry.resize(appearance.scale)
-        geometry.place_near(self.parent)
-        self.window.bind("<Escape>", lambda _event: self.window.destroy())
-        self.window.deiconify()
-        self.window.wait_visibility()
-        self.window.grab_set()
-        self.window.focus_set()
-        self.window.wait_window()
+        self.modal.show(scale=appearance.scale)
 
     def _use_changes(self):
         self.on_use_changes(self.section.values())

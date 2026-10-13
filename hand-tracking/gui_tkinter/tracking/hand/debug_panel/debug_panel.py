@@ -1,16 +1,17 @@
 """Deferred hand debugging panel with cached live data."""
 
-from .debug_tab import HandDebugTab
+from dataclasses import replace
 from landmarker import ModelStatus
+
+from .debug_tab import HandDebugTab
+from .live_hand_data import LiveHandData
 
 
 class HandDebugPanel:
     def __init__(self, on_open_settings=None):
         self.widget = None
         self._paused = False
-        self._report_paused = False
-        self._records = []
-        self._enabled = True
+        self.data = LiveHandData()
         self._model_status = ModelStatus()
         self._on_open_settings = on_open_settings
 
@@ -25,7 +26,6 @@ class HandDebugPanel:
         self.widget.pack(fill="both", expand=True)
         self.set_tracking_paused(self._paused)
         self.set_model_status(self._model_status)
-        self.update_gesture_display(self._records, self._enabled, self._report_paused)
         return self.widget
 
     def set_tracking_paused(self, paused):
@@ -35,34 +35,25 @@ class HandDebugPanel:
 
     def set_model_status(self, status):
         self._model_status = status
+        self.data = replace(self.data, blocking_reason=status.tracking_block_reason)
         if self.widget is not None:
             self.widget.model_status.set_status(status)
+            self.widget.live_gestures.update_data(self.data)
 
     def update_gesture_display(self, hand_states, enabled=True, paused=False):
-        self._records = list(hand_states)
-        self._enabled = enabled
-        self._report_paused = paused
+        self.data = LiveHandData(
+            tuple(hand_states), enabled, paused, self._model_status.tracking_block_reason,
+        )
         if self.widget is not None:
-            self.widget.live_gestures.update_data(
-                hand_states, enabled=enabled, paused=paused,
-                status_override=self._model_status.tracking_block_reason,
-            )
+            self.widget.live_gestures.update_data(self.data)
 
     @property
     def preview_fingers(self):
-        return self._records[0]["state"].fingers if self._records else None
+        return self.data.preview_fingers
 
     @property
     def preview_status(self):
-        if not self._enabled:
-            return "Tracking disabled"
-        if self._model_status.tracking_block_reason:
-            return self._model_status.tracking_block_reason
-        if self._report_paused:
-            return "Tracking paused"
-        if not self._records:
-            return "No hand detected"
-        return f"Live data · {self._records[0]['handedness']} hand"
+        return self.data.preview_status
 
     def set_display(self, theme_name, max_deviation):
         if self.widget is not None:

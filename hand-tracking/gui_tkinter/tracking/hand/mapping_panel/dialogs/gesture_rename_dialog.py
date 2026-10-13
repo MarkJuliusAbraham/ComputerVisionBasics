@@ -4,7 +4,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from gui_tkinter.components.theme import ThemeMetrics
-from gui_tkinter.core.window_geometry import WindowGeometry
+from gui_tkinter.core.modal_dialog import ModalDialog
 
 
 class GestureRenameDialog:
@@ -14,12 +14,9 @@ class GestureRenameDialog:
         self.on_save = on_save
 
     def show(self):
-        self.window = tk.Toplevel(self.parent)
-        self.window.withdraw()
-        self.window.title("Rename gesture")
-        self.window.transient(self.parent)
+        self.modal = ModalDialog(self.parent, "Rename gesture", base_size=(480, 220))
+        self.window = self.modal.window
         appearance = ThemeMetrics(self.window)
-        geometry = WindowGeometry(self.window, (480, 220), minimum_size=(320, 180))
         footer = ttk.Frame(self.window, padding=appearance.pixels(16))
         footer.pack(side="bottom", fill="x")
         ttk.Button(footer, text="Save name", command=self._save,
@@ -39,15 +36,8 @@ class GestureRenameDialog:
             justify="left",
         ).pack(anchor="w", pady=(appearance.pixels(8), 0))
         self.window.bind("<Return>", lambda _event: self._save())
-        self.window.bind("<Escape>", lambda _event: self.window.destroy())
-        geometry.resize(appearance.scale)
-        geometry.place_near(self.parent)
-        self.window.deiconify()
-        self.window.wait_visibility()
-        self.window.grab_set()
-        self.entry.focus_set()
         self.entry.selection_range(0, "end")
-        self.window.wait_window()
+        self.modal.show(scale=appearance.scale, initial_focus=self.entry)
 
     def _save(self):
         name = self.name_var.get().strip()

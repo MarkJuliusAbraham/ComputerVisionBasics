@@ -1,18 +1,20 @@
 """Shared gesture management actions for the browser and dedicated manager."""
 
-from dataclasses import replace
 from tkinter import messagebox
+from gestures.gesture_factory import GestureFactory
 
 from .dialogs import GestureManagerDialog, GestureRenameDialog
+from .gesture_collection import GestureCollectionDraft
 
 
 class GestureManagementActions:
-    def __init__(self, parent, session, *, before_edit, on_save, segment_count):
+    def __init__(self, parent, session, *, before_edit, on_save, segment_count, gesture_factory=None):
         self.parent = parent
         self.session = session
         self.before_edit = before_edit
         self.on_save = on_save
         self.segment_count = segment_count
+        self.gesture_factory = gesture_factory if gesture_factory is not None else GestureFactory()
 
     def manage(self):
         self.before_edit()
@@ -22,7 +24,7 @@ class GestureManagementActions:
         ).show()
 
     def _create(self, definitions):
-        return self.session.create_gesture(
+        return self.gesture_factory.create(
             definitions, self.segment_count(), self.session.config.reset_match,
             repeat_settings=self.session.config.repeat_settings,
         )
@@ -42,11 +44,9 @@ class GestureManagementActions:
     def _save_name(self, gesture_id, name):
         if not any(item.id == gesture_id for item in self.session.definitions):
             raise ValueError("This gesture is no longer in the active profile")
-        definitions = tuple(
-            replace(item, name=name) if item.id == gesture_id else item
-            for item in self.session.definitions
-        )
-        self.on_save(definitions, gesture_id)
+        draft = GestureCollectionDraft(self.session.definitions)
+        draft.rename(gesture_id, name)
+        self.on_save(draft.definitions, draft.selected_id)
 
     def delete(self, gesture_id):
         definitions = self.session.definitions
@@ -61,10 +61,10 @@ class GestureManagementActions:
             parent=self.parent.winfo_toplevel(),
         ):
             return
-        remaining = tuple(item for item in definitions if item.id != gesture_id)
-        selected_id = remaining[min(index, len(remaining) - 1)].id
+        draft = GestureCollectionDraft(definitions)
+        draft.delete(gesture_id)
         try:
-            self.on_save(remaining, selected_id)
+            self.on_save(draft.definitions, draft.selected_id)
         except (OSError, ValueError) as error:
             messagebox.showerror(
                 "Could not delete gesture", str(error), parent=self.parent.winfo_toplevel(),

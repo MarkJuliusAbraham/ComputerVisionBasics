@@ -1,7 +1,7 @@
 """One sizing policy shared by the two finger criteria tables."""
 
 from dataclasses import dataclass
-import tkinter as tk
+from gui_tkinter.core.idle_refresh import IdleRefresh
 
 from ..criteria_options import (
     CUSTOM_CLASSIFICATIONS, FINGER_NAMES, FINGER_OPTIONS, FingerCriteriaOptions,
@@ -26,18 +26,16 @@ class FingerCriteriaLayout:
         self.appearance = appearance
         self.tables = tables
         self.metrics = None
-        self._pending = None
+        self.refresh_request = IdleRefresh(owner, self.refresh, event="<<ThemeChanged>>")
 
     @property
     def label_width(self):
         return self.appearance.font.measure("Palm orientation") + self.appearance.pixels(16)
 
     def schedule_refresh(self, _event=None):
-        if self._pending is None:
-            self._pending = self.owner.after_idle(self.refresh)
+        self.refresh_request.schedule()
 
     def refresh(self):
-        self._pending = None
         if not self.owner.winfo_exists():
             return
         self.appearance.refresh()
@@ -79,11 +77,3 @@ class FingerCriteriaLayout:
             preferred_width=label_width + max(simple_width, len(FINGER_OPTIONS) * column_hint),
             height=heading_height + len(FINGER_NAMES) * (row_height + divider_height),
         )
-
-    def widget_destroyed(self, event):
-        if event.widget is self.owner and self._pending is not None:
-            try:
-                self.owner.after_cancel(self._pending)
-            except tk.TclError:
-                pass
-            self._pending = None

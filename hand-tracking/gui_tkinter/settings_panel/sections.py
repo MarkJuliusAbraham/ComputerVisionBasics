@@ -1,89 +1,10 @@
 """Independent sections that make up the settings form."""
 
-from dataclasses import dataclass
 import tkinter as tk
 from tkinter import filedialog, ttk
 
 from settings.settings_manager import Settings, THEMES, UI_SCALES
-
-
-@dataclass(frozen=True)
-class FieldSpec:
-    key: str
-    label: str
-    kind: str
-    options: tuple[str, ...] = ()
-    minimum: float = 0.0
-    maximum: float = 0.0
-    increment: float = 1.0
-
-
-class FieldSection(ttk.LabelFrame):
-    """Label frame that builds consistently aligned ttk form rows."""
-
-    def __init__(self, master, title, fields, on_change=None):
-        super().__init__(master, text=title, padding=(12, 8, 12, 10))
-        self.variables = {}
-        self._on_change = on_change
-        self.columnconfigure(0, weight=1)
-        for field in fields:
-            self._add_field(field)
-
-    def _add_field(self, field):
-        row = ttk.Frame(self)
-        row.pack(fill="x", pady=4)
-        row.columnconfigure(0, weight=1)
-
-        if field.kind == "check":
-            variable = tk.BooleanVar()
-            ttk.Checkbutton(
-                row,
-                text=field.label,
-                variable=variable,
-            ).grid(row=0, column=0, sticky="w")
-        elif field.kind == "number":
-            variable = tk.DoubleVar()
-            ttk.Label(row, text=field.label).grid(
-                row=0, column=0, sticky="w", padx=(0, 12)
-            )
-            ttk.Spinbox(
-                row,
-                textvariable=variable,
-                from_=field.minimum,
-                to=field.maximum,
-                increment=field.increment,
-                width=9,
-                command=self._notify_change,
-            ).grid(row=0, column=1, sticky="e")
-        else:
-            variable = tk.StringVar()
-            ttk.Label(row, text=field.label).grid(
-                row=0, column=0, sticky="w", padx=(0, 12)
-            )
-            combo = ttk.Combobox(
-                row,
-                textvariable=variable,
-                values=field.options,
-                state="readonly",
-                width=14,
-            )
-            combo.grid(row=0, column=1, sticky="e")
-            combo.bind("<<ComboboxSelected>>", lambda _event: self._notify_change())
-
-        variable.trace_add("write", lambda *_args: self._notify_change())
-        self.variables[field.key] = variable
-
-    def _notify_change(self):
-        if self._on_change:
-            self._on_change()
-
-    def values(self):
-        return {key: variable.get() for key, variable in self.variables.items()}
-
-    def load_values(self, values):
-        for key, variable in self.variables.items():
-            if key in values and values[key] is not None:
-                variable.set(values[key])
+from gui_tkinter.components.field_section import FieldSection, FieldSpec
 
 
 class AppearanceSection(FieldSection):

@@ -1,5 +1,12 @@
 """Readable, unique names for gesture selection widgets."""
 
+from pathlib import Path
+
+
+def profile_display_name(path):
+    profile = Path(path)
+    return profile.stem.replace("_", " ").replace("-", " ").title() or profile.name
+
 
 def gesture_display_names(definitions):
     """Return definitions paired with labels that never expose internal IDs."""

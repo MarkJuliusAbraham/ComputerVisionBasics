@@ -35,8 +35,6 @@ class FingerCriteriaEditor(ttk.Frame):
         self._show_mode()
         self.layout.refresh()
         self.layout.schedule_refresh()
-        self.bind("<<ThemeChanged>>", self.layout.schedule_refresh)
-        self.bind("<Destroy>", self.layout.widget_destroyed)
 
     @property
     def mode(self):

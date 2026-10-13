@@ -4,6 +4,8 @@ import tkinter as tk
 from tkinter import ttk
 
 from gui_tkinter.components.theme import ThemeMetrics
+from gui_tkinter.core.change_notifications import ChangeNotifications
+from gui_tkinter.core.idle_refresh import IdleRefresh
 
 
 class CommandSequenceSection(ttk.LabelFrame):
@@ -12,8 +14,7 @@ class CommandSequenceSection(ttk.LabelFrame):
     def __init__(self, master, on_change=None, appearance=None):
         super().__init__(master, text="Command sequence")
         self.appearance = appearance if appearance is not None else ThemeMetrics(self)
-        self._on_change = on_change
-        self._loading = False
+        self.changes = ChangeNotifications(self, on_change)
         self.commands = tk.StringVar(self)
         self.delay = tk.StringVar(self)
 
@@ -30,23 +31,15 @@ class CommandSequenceSection(ttk.LabelFrame):
         ttk.Spinbox(
             row, textvariable=self.delay, from_=0, to=10000, increment=50, width=10,
         ).pack(side="right", padx=(self.appearance.pixels(12), 0))
-        for variable in (self.commands, self.delay):
-            variable.trace_add("write", self._changed)
+        self.changes.watch(self.commands, self.delay)
         self._refresh_layout()
-        self.bind("<<ThemeChanged>>", lambda _event: self._refresh_layout())
+        self.theme_refresh = IdleRefresh(self, self._refresh_layout, event="<<ThemeChanged>>")
 
     def _refresh_layout(self):
         self.appearance.refresh()
         self.configure(padding=self.appearance.pixels(16))
 
     def load(self, commands, delay):
-        self._loading = True
-        try:
+        with self.changes.suspended():
             self.commands.set(commands)
             self.delay.set(delay)
-        finally:
-            self._loading = False
-
-    def _changed(self, *_args):
-        if not self._loading and self._on_change:
-            self._on_change()

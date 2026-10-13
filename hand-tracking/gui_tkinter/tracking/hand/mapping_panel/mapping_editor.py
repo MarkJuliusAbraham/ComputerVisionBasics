@@ -2,28 +2,33 @@
 
 from tkinter import ttk
 
-from gui_tkinter.components.unapplied_changes_dialog import UnappliedChangesDialog
+from gui_tkinter.core.unsaved_changes_guard import PendingChanges, UnsavedChangesGuard
 
 from .dialogs import GestureProfilePickerDialog, ResetGestureDialog
 from .gesture_management import GestureManagementActions
 from .mapping_form import MappingForm
 from .mapping_session import MappingSession
+from .mapping_callbacks import MappingCallbacks
 
 
 class MappingEditor(ttk.Frame):
     """Connect the form and its editing session to application callbacks."""
 
-    def __init__(self, master, on_saved=None, config_path=None, segment_count=4):
+    def __init__(
+        self, master, on_saved=None, config_path=None, segment_count=4, *,
+        session=None, form_factory=MappingForm, changes_guard=None,
+    ):
         super().__init__(master)
         self.on_saved = on_saved
-        self.session = MappingSession(config_path=config_path)
+        self.session = session if session is not None else MappingSession(config_path=config_path)
+        self.changes_guard = changes_guard if changes_guard is not None else UnsavedChangesGuard(self.winfo_toplevel())
+        self.pending_changes = PendingChanges("Mapping", self.is_dirty, self.save, self.discard)
         self._shown_id = next(iter(self.session.drafts), None)
         self.gesture_management = GestureManagementActions(
             self, self.session, before_edit=self._capture_draft,
             on_save=self._save_managed_gestures, segment_count=lambda: self.form.segment_count,
         )
-        self.form = MappingForm(
-            self,
+        callbacks = MappingCallbacks(
             on_change=self._editor_changed,
             on_repeat_change=self._repeat_changed,
             on_select=self._selection_changed,
@@ -34,8 +39,8 @@ class MappingEditor(ttk.Frame):
             on_edit_reset=self._edit_reset,
             on_save=self.save,
             on_discard=self.discard,
-            segment_count=segment_count,
         )
+        self.form = form_factory(self, callbacks=callbacks, segment_count=segment_count)
         self.form.pack(fill="both", expand=True)
         self._refresh_form()
 
@@ -49,14 +54,15 @@ class MappingEditor(ttk.Frame):
             self._shown_id = selected_id
         if self._shown_id not in self.session.drafts:
             self._shown_id = next(iter(self.session.drafts), None)
+        validation = self.session.validation_report
         self.form.show_profile(self.session.config_path)
         self.form.show_gestures(
-            self.session.definitions, self._shown_id, validation=self.session.validation_report,
+            self.session.definitions, self._shown_id, validation=validation,
         )
         if self._shown_id is not None:
             self.form.load_draft(self.session.drafts[self._shown_id])
         self.form.load_reset(self.session.reset_draft)
-        self._refresh_feedback()
+        self.form.set_dirty(self.session.is_dirty)
 
     def _refresh_feedback(self):
         self.form.set_dirty(self.session.is_dirty)
@@ -128,21 +134,8 @@ class MappingEditor(ttk.Frame):
         )
         self._notify_saved(config)
 
-    def _confirm_profile_change(self):
-        if not self.is_dirty():
-            return True
-        choice = UnappliedChangesDialog(
-            self.winfo_toplevel(), context="Mapping", action_label="Save"
-        ).show()
-        if choice == "save":
-            return self.save()
-        if choice == "discard":
-            self.discard()
-            return True
-        return False
-
     def _activate_profile(self, path):
-        if not self._confirm_profile_change():
+        if not self.changes_guard.confirm(self.pending_changes, return_label="Cancel"):
             return False
         try:
             config = self.session.activate_profile(path)

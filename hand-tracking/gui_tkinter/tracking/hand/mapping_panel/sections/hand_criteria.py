@@ -1,10 +1,12 @@
 """Palm orientation and finger criteria as a single editing component."""
 
+from gui_tkinter.core.idle_refresh import IdleRefresh
 import tkinter as tk
 from tkinter import ttk
 
 from gestures.gesture_config import GestureMatch
 from gui_tkinter.components.theme import ThemeMetrics
+from gui_tkinter.core.change_notifications import ChangeNotifications
 
 from .criteria_options import PALM_OPTIONS
 from .finger_criteria import FingerCriteriaEditor
@@ -18,8 +20,7 @@ class HandCriteriaSection(ttk.Frame):
     ):
         super().__init__(master)
         self.appearance = appearance or ThemeMetrics(self)
-        self._on_change = on_change
-        self._loading = False
+        self.changes = ChangeNotifications(self, on_change)
         self.columnconfigure(0, weight=1)
 
         self.header = ttk.Frame(self)
@@ -46,7 +47,7 @@ class HandCriteriaSection(ttk.Frame):
         ).grid(row=0, column=1, sticky="ew")
 
         self.fingers = FingerCriteriaEditor(
-            self, on_change=self._changed, appearance=self.appearance,
+            self, on_change=self.changes.emit, appearance=self.appearance,
             segment_count=segment_count,
         )
         self.fingers.grid(row=2, column=0, sticky="ew")
@@ -61,9 +62,9 @@ class HandCriteriaSection(ttk.Frame):
             self, textvariable=self.fingers.availability_message, width=1, anchor="w",
         )
         self.availability_hint.grid(row=4, column=0, sticky="ew")
-        self.palm.trace_add("write", self._changed)
+        self.changes.watch(self.palm)
         self._refresh_layout()
-        self.bind("<<ThemeChanged>>", lambda _event: self.after_idle(self._refresh_layout))
+        self.theme_refresh = IdleRefresh(self, self._refresh_layout, event="<<ThemeChanged>>")
 
     def _refresh_layout(self):
         self.appearance.refresh()
@@ -84,16 +85,9 @@ class HandCriteriaSection(ttk.Frame):
         )
 
     def load(self, match):
-        self._loading = True
-        try:
+        with self.changes.suspended():
             self.palm.set(next(label for label, value in PALM_OPTIONS.items() if value == match.palm))
             self.fingers.load(match.fingers)
-        finally:
-            self._loading = False
-
-    def _changed(self, *_args):
-        if not self._loading and self._on_change:
-            self._on_change()
 
     def _toggle_mode(self):
         self.fingers.toggle_mode()

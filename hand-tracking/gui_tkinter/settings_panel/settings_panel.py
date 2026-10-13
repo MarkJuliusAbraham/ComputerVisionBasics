@@ -1,12 +1,12 @@
 """Settings persistence shared by the hub and individual tracking modules."""
 
-from copy import deepcopy
 from tkinter import ttk
 
 from settings.settings_manager import SHARED_SETTINGS_SCOPE, SettingsData
-from gui_tkinter.components.buttons import DiscardChangesButton
+from gui_tkinter.components.commit_actions import CommitActions
 
 from .settings_form import SettingsForm
+from .settings_session import SettingsSession
 
 
 class SettingsPanel:
@@ -20,29 +20,22 @@ class SettingsPanel:
         self.on_apply = on_apply
         self.scope = scope
         self.form_factory = form_factory
-        self._baseline = SettingsData()
-        self._form_baseline = {}
+        self.session = SettingsSession(scope)
         self.form = None
 
     def build(self, parent, settings):
         self.root = parent.winfo_toplevel()
         content = ttk.Frame(parent)
         content.pack(fill="both", expand=True)
-        footer = ttk.Frame(content)
-        footer.pack(side="bottom", fill="x", padx=12, pady=12)
-        self.apply_button = ttk.Button(
-            footer, text="Apply", command=self.apply, style="Accent.TButton",
+        footer = self.actions = CommitActions(
+            content, on_save=self.apply, on_discard=self.discard, save_label="Apply",
         )
-        self.apply_button.pack(side="right")
-        self.discard_button = DiscardChangesButton(footer, command=self.discard)
-        self.discard_button.pack(side="right", padx=(0, 8))
+        footer.pack(side="bottom", fill="x", padx=12, pady=12)
         self.form = self.form_factory(
             content, settings=settings, on_change=self._refresh_apply_state,
             on_settings_path=self.on_settings_path,
         )
-        ttk.Label(footer, textvariable=self.form.status_var, wraplength=360).pack(
-            side="left", fill="x", expand=True,
-        )
+        footer.message.use_variable(self.form.status_var)
         ttk.Label(content, textvariable=self.form.validation_error, wraplength=600).pack(
             side="bottom", fill="x", padx=12,
         )
@@ -51,26 +44,24 @@ class SettingsPanel:
         return self.form
 
     def get_values(self):
-        return self.scope.merge(self._baseline, self.form.values())
+        return self.session.merge(self.form.values())
 
     def is_dirty(self):
         return (
             self.form is not None
-            and self.form.draft_values() != self._form_baseline
+            and self.session.is_dirty(self.form.draft_values())
         )
 
     def _refresh_apply_state(self):
         if self.form is None:
             return
-        state = ["!disabled" if self.is_dirty() else "disabled"]
-        self.apply_button.state(state)
-        self.discard_button.state(state)
+        self.actions.set_dirty(self.is_dirty())
 
     def show_settings(self, settings):
-        self._baseline = deepcopy(settings.data)
+        self.session.rebase(settings.data)
         if self.form is not None:
             self.form.load(settings)
-            self._form_baseline = deepcopy(self.form.draft_values())
+            self.session.accept(settings.data, self.form.draft_values())
             self.form.status_var.set(f"{self.scope.name} settings loaded")
             self._refresh_apply_state()
 
@@ -79,7 +70,7 @@ class SettingsPanel:
         if set(changed_fields).intersection(self.scope.fields):
             self.show_settings(settings)
         else:
-            self._baseline = deepcopy(settings.data)
+            self.session.rebase(settings.data)
             self.set_theme(settings.data.theme)
             self._refresh_apply_state()
 
@@ -100,16 +91,17 @@ class SettingsPanel:
             return False
         if result is False:
             return False
-        self._baseline = deepcopy(result if isinstance(result, SettingsData) else data)
-        self._form_baseline = deepcopy(self.form.draft_values())
+        self.session.accept(
+            result if isinstance(result, SettingsData) else data, self.form.draft_values(),
+        )
         self._refresh_apply_state()
         self.form.status_var.set(f"{self.scope.name} settings applied and saved")
         return True
 
     def discard(self):
         if self.form is not None:
-            self.form.load_data(self._baseline)
-            self._form_baseline = deepcopy(self.form.draft_values())
+            self.form.load_data(self.session.baseline)
+            self.session.accept(self.session.baseline, self.form.draft_values())
             self.form.status_var.set("Unsaved settings discarded")
             self._refresh_apply_state()
 

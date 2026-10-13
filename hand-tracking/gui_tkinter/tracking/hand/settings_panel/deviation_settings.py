@@ -5,6 +5,7 @@ from tkinter import ttk
 
 from gui_tkinter.components.finger_threshold_control import FingerThresholdControl
 from gui_tkinter.components.theme import DeviationTheme, ThemeMetrics
+from gui_tkinter.core.change_notifications import ChangeNotifications
 from settings.settings_manager import default_finger_thresholds, resize_finger_thresholds
 
 from .deviation_preview import DeviationPreview
@@ -15,8 +16,7 @@ class DeviationSettings(ttk.Frame):
 
     def __init__(self, master, theme_name, max_deviation, on_change=None):
         super().__init__(master)
-        self._on_change = on_change
-        self._loading = False
+        self.changes = ChangeNotifications(self, on_change)
         self.appearance = ThemeMetrics(self)
         palette_provider = DeviationTheme(self)
         self.segment_count = tk.IntVar(self, value=4)
@@ -46,14 +46,12 @@ class DeviationSettings(ttk.Frame):
             appearance=self.appearance, palette_provider=palette_provider,
         )
         self.preview.pack(fill="x")
-        self.segment_count.trace_add("write", self._segments_changed)
+        self.changes.watch(self.segment_count, callback=self._segments_changed)
         self.bind("<<ThemeChanged>>", lambda _event: self.appearance.refresh())
         self.set_theme(theme_name)
         self._update_preview()
 
     def _segments_changed(self, *_args):
-        if self._loading:
-            return
         count = self.segment_count.get()
         thresholds = resize_finger_thresholds(self.control.thresholds, count)
         self.control.set_ranges(thresholds, count)
@@ -61,8 +59,7 @@ class DeviationSettings(ttk.Frame):
 
     def _thresholds_changed(self):
         self._update_preview()
-        if not self._loading and self._on_change:
-            self._on_change()
+        self.changes.emit()
 
     def _update_preview(self):
         thresholds = self.control.thresholds
@@ -77,15 +74,12 @@ class DeviationSettings(ttk.Frame):
         }
 
     def load(self, data):
-        self._loading = True
-        try:
+        with self.changes.suspended():
             self.segment_count.set(data.finger_segment_count)
             self.control.set_ranges(
                 data.finger_classification_thresholds, data.finger_segment_count,
             )
             self._update_preview()
-        finally:
-            self._loading = False
 
     def set_theme(self, theme_name):
         self.control.set_theme(theme_name)

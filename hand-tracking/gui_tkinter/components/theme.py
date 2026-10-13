@@ -75,7 +75,15 @@ class ThemeMetrics:
         self.colors = ThemeColors(widget)
         self.font = tkfont.Font(root=widget)
         self.heading_font = self.font.copy()
+        self._variants = []
         self.refresh()
+
+    def font_variant(self, *, size_delta=0, weight=None):
+        """Keep a component's emphasis in sync with the theme's font family."""
+        variant = self.font.copy()
+        self._variants.append((variant, size_delta, weight))
+        self.refresh()
+        return variant
 
     def refresh(self):
         self.scale = float(self.widget.tk.call("tk", "scaling")) * 72 / 96
@@ -91,6 +99,13 @@ class ThemeMetrics:
         heading_attributes = {**attributes, "weight": "bold"}
         if self.heading_font.actual() != heading_attributes:
             self.heading_font.configure(**heading_attributes)
+        for variant, size_delta, weight in self._variants:
+            variant_attributes = {
+                **attributes, "size": attributes["size"] + size_delta,
+                "weight": weight if weight is not None else attributes["weight"],
+            }
+            if variant.actual() != variant_attributes:
+                variant.configure(**variant_attributes)
 
     def pixels(self, value):
         return round(value * self.scale)
@@ -206,4 +221,3 @@ def apply_theme(root, name, scale=1.0):
     style.configure("TButton", padding=padding)
     style.configure("Accent.TButton", padding=padding)
     TitleBarTheme.for_root(root, lambda: ThemeColors(root).title_bar).refresh()
-

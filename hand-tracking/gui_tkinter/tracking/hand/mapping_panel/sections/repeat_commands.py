@@ -1,5 +1,6 @@
 """Movement repeat controls and the scope of their pending mapping edits."""
 
+from gui_tkinter.core.idle_refresh import IdleRefresh
 import tkinter as tk
 from tkinter import ttk
 
@@ -35,7 +36,7 @@ class RepeatCommandsSection(ttk.LabelFrame):
         )
         self.hint.pack(fill="x")
         self.bind("<Configure>", self._wrap_text)
-        self.bind("<<ThemeChanged>>", lambda _event: self.after_idle(self._refresh_layout))
+        self.theme_refresh = IdleRefresh(self, self._refresh_layout, event="<<ThemeChanged>>")
         self._refresh_layout()
 
     def _refresh_layout(self):

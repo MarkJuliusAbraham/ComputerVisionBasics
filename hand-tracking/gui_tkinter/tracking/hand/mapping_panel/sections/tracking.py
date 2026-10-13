@@ -1,19 +1,20 @@
 """Editable per-gesture tracking options, separate from detection criteria."""
 
+from gui_tkinter.core.idle_refresh import IdleRefresh
 import tkinter as tk
 from tkinter import ttk
 
 from gestures.finger_classifier import FINGERS
 from gestures.tracking.settings import GestureTrackingSettings
 from gui_tkinter.components.theme import ThemeMetrics
+from gui_tkinter.core.change_notifications import ChangeNotifications
 
 
 class GestureTrackingSection(ttk.LabelFrame):
     def __init__(self, master, on_change=None, *, appearance=None):
         super().__init__(master, text="Tracking")
         self.appearance = appearance if appearance is not None else ThemeMetrics(self)
-        self._on_change = on_change
-        self._loading = False
+        self.changes = ChangeNotifications(self, on_change)
         ttk.Label(self, text="Tracked fingertips").pack(anchor="w")
         self.choices = ttk.Frame(self)
         self.choices.pack(fill="x")
@@ -25,7 +26,7 @@ class GestureTrackingSection(ttk.LabelFrame):
             ttk.Checkbutton(self.choices, text=name.title(), variable=variable).grid(
                 row=0, column=column, sticky="w",
             )
-            variable.trace_add("write", self._changed)
+            self.changes.watch(variable)
             self.variables[name] = variable
         ttk.Label(
             self, text="Each selected fingertip draws its own path.",
@@ -36,9 +37,9 @@ class GestureTrackingSection(ttk.LabelFrame):
             self, text="Use optimistic tracking", variable=self.optimistic_enabled,
         )
         self.optimistic_choice.pack(anchor="w")
-        self.optimistic_enabled.trace_add("write", self._changed)
+        self.changes.watch(self.optimistic_enabled)
         self._refresh_layout()
-        self.bind("<<ThemeChanged>>", lambda _event: self.after_idle(self._refresh_layout))
+        self.theme_refresh = IdleRefresh(self, self._refresh_layout, event="<<ThemeChanged>>")
 
     def _refresh_layout(self):
         self.appearance.refresh()
@@ -47,19 +48,12 @@ class GestureTrackingSection(ttk.LabelFrame):
         self.optimistic_choice.pack_configure(pady=(self.appearance.pixels(12), 0))
 
     def load(self, settings, *, use_optimistic_tracking=True):
-        self._loading = True
-        try:
+        with self.changes.suspended():
             self.optimistic_enabled.set(use_optimistic_tracking)
             for name, variable in self.variables.items():
                 variable.set(name in settings.fingers)
-        finally:
-            self._loading = False
 
     def values(self):
         return GestureTrackingSettings(tuple(
             name for name, variable in self.variables.items() if variable.get()
         ))
-
-    def _changed(self, *_args):
-        if not self._loading and self._on_change:
-            self._on_change()

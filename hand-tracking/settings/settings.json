@@ -2,7 +2,7 @@
   "track_hands": true,
   "profile": true,
   "theme": "Nier Light",
-  "ui_scale": "200%",
+  "ui_scale": "150%",
   "finger_segment_count": 6,
   "finger_classification_thresholds": [
     15.4,
@@ -16,17 +16,17 @@
   "optimistic_tracking": {
     "enabled": true,
     "lookback_seconds": 2.0,
+    "activation_distance": 0.09,
+    "repeat_delay_ms": 50.0,
+    "delay_variance_ms": 0.0,
     "movement": {
       "initial_displacement": 0.03,
-      "distance_threshold": 0.09,
-      "min_interval_seconds": 0.05,
-      "max_repeats": 2,
+      "buffer_credit": 0.0,
       "axis_weights": {
         "x": 1.0,
         "y": 1.0,
         "z": 0.0
-      },
-      "buffer_credit": 0.0
+      }
     }
   }
 }

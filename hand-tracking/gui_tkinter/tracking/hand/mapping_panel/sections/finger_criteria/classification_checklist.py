@@ -2,6 +2,7 @@
 
 import tkinter as tk
 from tkinter import ttk
+from gui_tkinter.core.change_notifications import ChangeNotifications
 
 from ..criteria_options import FINGER_NAMES, FINGER_OPTIONS
 from .table import FingerCriteriaTable
@@ -13,7 +14,7 @@ class ClassificationChecklist(FingerCriteriaTable):
     def __init__(self, master, appearance, on_toggle):
         super().__init__(master, appearance)
         self._on_toggle = on_toggle
-        self._loading = False
+        self.changes = ChangeNotifications(self)
         self._columns_key = None
         self.variables = {name: {} for name in FINGER_NAMES}
         self.checkboxes = {name: {} for name in FINGER_NAMES}
@@ -28,8 +29,8 @@ class ClassificationChecklist(FingerCriteriaTable):
                 checkbox.grid(row=self.finger_row(index), column=column)
                 self.variables[name][position] = variable
                 self.checkboxes[name][position] = checkbox
-                variable.trace_add(
-                    "write", lambda *_args, finger=name, classification=position:
+                self.changes.watch(
+                    variable, callback=lambda finger=name, classification=position:
                     self._changed(finger, classification),
                 )
 
@@ -38,8 +39,7 @@ class ClassificationChecklist(FingerCriteriaTable):
         return tuple(checkbox for row in self.checkboxes.values() for checkbox in row.values())
 
     def load(self, model):
-        self._loading = True
-        try:
+        with self.changes.suspended():
             selections = model.values()
             for name, variables in self.variables.items():
                 for position, variable in variables.items():
@@ -51,8 +51,6 @@ class ClassificationChecklist(FingerCriteriaTable):
                         else ["disabled"]
                     )
             self._show_columns(model)
-        finally:
-            self._loading = False
 
     def _show_columns(self, model):
         visible = model.visible_positions
@@ -82,5 +80,4 @@ class ClassificationChecklist(FingerCriteriaTable):
         self._columns_key = key
 
     def _changed(self, name, position):
-        if not self._loading:
-            self._on_toggle(name, position, self.variables[name][position].get())
+        self._on_toggle(name, position, self.variables[name][position].get())

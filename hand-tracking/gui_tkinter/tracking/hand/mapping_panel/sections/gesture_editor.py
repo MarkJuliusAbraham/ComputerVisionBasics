@@ -1,5 +1,6 @@
 """Selected gesture details independent of profile and list navigation."""
 
+from gui_tkinter.core.idle_refresh import IdleRefresh
 from tkinter import ttk
 
 from ..gesture_draft import GestureDraft
@@ -29,7 +30,7 @@ class GestureEditorSection(ttk.Frame):
             self, text="No gestures in this profile. Use Manage gestures to create one.",
             wraplength=500,
         )
-        self.bind("<<ThemeChanged>>", lambda _event: self.after_idle(self._refresh_layout))
+        self.theme_refresh = IdleRefresh(self, self._refresh_layout, event="<<ThemeChanged>>")
 
     def _refresh_layout(self):
         self.appearance.refresh()

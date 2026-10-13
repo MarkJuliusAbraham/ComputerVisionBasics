@@ -2,6 +2,7 @@
 
 import tkinter as tk
 from tkinter import ttk
+from gui_tkinter.core.idle_refresh import IdleRefresh
 
 from .theme import ThemeMetrics
 
@@ -19,13 +20,18 @@ class StatusMessage(ttk.Frame):
         )
         self.label.pack(fill="both", expand=True)
         self.bind("<Configure>", self._resize)
-        self.bind("<<ThemeChanged>>", lambda _event: self.after_idle(self._refresh_theme))
+        self.theme_refresh = IdleRefresh(self, self._refresh_theme, event="<<ThemeChanged>>")
         self._refresh_theme()
 
     def set(self, message, *, warning=False):
         self.text.set(message)
         self._warning = warning
         self._refresh_theme()
+
+    def use_variable(self, variable):
+        """Display an existing form status source without copying its state."""
+        self.text = variable
+        self.label.configure(textvariable=variable)
 
     def _refresh_theme(self):
         self.appearance.refresh()

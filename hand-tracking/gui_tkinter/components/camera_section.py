@@ -1,9 +1,11 @@
 """Shared camera selection and connection status for the application hub."""
 
 import tkinter as tk
-from tkinter import font as tkfont, ttk
+from tkinter import ttk
 
 from gui_tkinter.core.state import CameraState
+from gui_tkinter.core.change_notifications import ChangeNotifications
+from .status_message import StatusMessage
 
 
 class CameraSection(ttk.LabelFrame):
@@ -47,20 +49,11 @@ class CameraSection(ttk.LabelFrame):
 
         # A fixed two-line area prevents lengthy worker messages from changing
         # the width or pushing the live hand data down during a switch.
-        self._message_area = ttk.Frame(self)
-        self._message_area.grid(row=2, column=0, columnspan=3, sticky="ew", pady=(6, 0))
-        self._message_area.grid_propagate(False)
-        self._message_area.columnconfigure(0, weight=1)
-        self._message_area.rowconfigure(0, weight=1)
-        self.message_label = ttk.Label(
-            self._message_area, textvariable=self.message,
-            anchor="nw", justify="left", width=1, wraplength=1,
-        )
-        self.message_label.grid(row=0, column=0, sticky="nsew")
-        self._message_area.bind("<Configure>", self._resize_message)
-        self.bind("<<ThemeChanged>>", self._theme_changed)
-        self.selected_device.trace_add("write", self._refresh_switch_state)
-        self._reserve_message_height()
+        self.feedback = StatusMessage(self)
+        self.feedback.use_variable(self.message)
+        self.feedback.grid(row=2, column=0, columnspan=3, sticky="ew", pady=(6, 0))
+        self.changes = ChangeNotifications(self, self._refresh_switch_state)
+        self.changes.watch(self.selected_device)
         self._refresh_switch_state()
 
     def _ensure_device(self, index):
@@ -120,14 +113,3 @@ class CameraSection(ttk.LabelFrame):
             self.message.set(message or f"Could not open camera {requested}. Select a device and try again.")
         self.active_device.set(f"Camera {active}" if active is not None else "None")
         self._refresh_switch_state()
-
-    def _resize_message(self, event):
-        self.message_label.configure(wraplength=max(1, event.width))
-
-    def _reserve_message_height(self):
-        font_spec = ttk.Style(self).lookup("TLabel", "font") or "TkDefaultFont"
-        font = tkfont.Font(root=self, font=font_spec)
-        self._message_area.configure(height=2 * font.metrics("linespace") + 4)
-
-    def _theme_changed(self, _event):
-        self.after_idle(self._reserve_message_height)

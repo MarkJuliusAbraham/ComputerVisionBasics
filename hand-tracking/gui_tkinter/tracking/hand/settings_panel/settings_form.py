@@ -1,5 +1,6 @@
 """Hand tracking settings form with a dedicated deviation preview."""
 
+from gui_tkinter.core.idle_refresh import IdleRefresh
 from gui_tkinter.settings_panel.sectioned_form import SectionedSettingsForm
 
 from .tracking_section import TrackingSection
@@ -26,7 +27,7 @@ class HandSettingsForm(SectionedSettingsForm):
             self.content, on_change=self.notify_change, appearance=self.appearance,
         )
         self.add_section("Optimistic Tracking", self.optimistic, row=0, column=1, rowspan=2)
-        self.bind("<<ThemeChanged>>", lambda _event: self.after_idle(self._refresh_layout))
+        self.theme_refresh = IdleRefresh(self, self._refresh_layout, event="<<ThemeChanged>>")
         self._refresh_layout()
 
     def _refresh_layout(self):

@@ -2,13 +2,13 @@
 
 import tkinter as tk
 from tkinter import ttk
+from gui_tkinter.core.change_notifications import ChangeNotifications
 
 
 class SectionedSettingsForm(ttk.Frame):
     def __init__(self, master, on_change=None):
         super().__init__(master)
-        self._loading = False
-        self._on_change = on_change
+        self.changes = ChangeNotifications(self, on_change)
         self.content = ttk.Frame(self)
         self.content.pack(fill="both", expand=True)
         self.sections = {}
@@ -25,8 +25,7 @@ class SectionedSettingsForm(ttk.Frame):
         self.variables.update(getattr(section, "variables", {}))
 
     def notify_change(self):
-        if not self._loading and self._on_change:
-            self._on_change()
+        self.changes.emit()
 
     def values(self):
         values = {}
@@ -44,15 +43,12 @@ class SectionedSettingsForm(ttk.Frame):
         return values
 
     def load_data(self, data):
-        self._loading = True
-        try:
+        with self.changes.suspended():
             for section in self.sections.values():
                 if hasattr(section, "load"):
                     section.load(data)
             self.validation_error.set("")
             self.set_theme(data.theme)
-        finally:
-            self._loading = False
 
     def load(self, settings):
         self.load_data(settings.data)

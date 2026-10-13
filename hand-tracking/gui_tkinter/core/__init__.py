@@ -1,19 +1,5 @@
-"""Window composition, lifecycle, and shared UI state."""
+"""Window composition, lifecycle, and shared UI state.
 
-from .state import (
-    CameraState,
-    ControlCallbacks,
-    ControlWindowContext,
-    PanelSet,
-    WindowView,
-)
-from .window_lifecycle import WindowLifecycleController
-
-__all__ = [
-    "CameraState",
-    "ControlCallbacks",
-    "ControlWindowContext",
-    "PanelSet",
-    "WindowLifecycleController",
-    "WindowView",
-]
+Import dependencies from their defining modules to avoid loading dialogs and
+widgets when a caller only needs state or a notification helper.
+"""

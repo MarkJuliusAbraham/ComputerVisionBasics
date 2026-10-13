@@ -2,6 +2,7 @@
 
 import tkinter as tk
 from tkinter import ttk
+from gui_tkinter.core.change_notifications import ChangeNotifications
 
 from ..criteria_options import CUSTOM_CLASSIFICATIONS, FINGER_NAMES
 from .table import FingerCriteriaTable
@@ -13,7 +14,7 @@ class SimpleChoicesTable(FingerCriteriaTable):
     def __init__(self, master, appearance, on_select):
         super().__init__(master, appearance)
         self._on_select = on_select
-        self._loading = False
+        self.changes = ChangeNotifications(self)
         self.variables = {}
         self.selectors = {}
         self.heading("Allowed position", 1)
@@ -27,15 +28,14 @@ class SimpleChoicesTable(FingerCriteriaTable):
             selector.grid(row=self.finger_row(index), column=1, sticky="ew")
             self.variables[name] = variable
             self.selectors[name] = selector
-            variable.trace_add("write", lambda *_args, finger=name: self._changed(finger))
+            self.changes.watch(variable, callback=lambda finger=name: self._changed(finger))
 
     @property
     def controls(self):
         return tuple(self.selectors.values())
 
     def load(self, model):
-        self._loading = True
-        try:
+        with self.changes.suspended():
             for name, variable in self.variables.items():
                 label = model.label_for(name)
                 choices = tuple(model.options.simple_choices)
@@ -44,9 +44,6 @@ class SimpleChoicesTable(FingerCriteriaTable):
                 self.selectors[name].configure(values=choices)
                 if variable.get() != label:
                     variable.set(label)
-        finally:
-            self._loading = False
 
     def _changed(self, name):
-        if not self._loading:
-            self._on_select(name, self.variables[name].get())
+        self._on_select(name, self.variables[name].get())

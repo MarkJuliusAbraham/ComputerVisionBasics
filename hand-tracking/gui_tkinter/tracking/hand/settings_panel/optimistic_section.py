@@ -2,19 +2,20 @@
 
 import tkinter as tk
 from tkinter import ttk
+from gui_tkinter.core.idle_refresh import IdleRefresh
 
 from gestures.optimistic.settings import OptimisticTrackingSettings
 from gestures.repeating.settings import AxisWeights, MovementBufferSettings
 from gui_tkinter.components.movement_controls import AxisWeightsControl, NumericSettingRow
 from gui_tkinter.components.theme import ThemeMetrics
+from gui_tkinter.core.change_notifications import ChangeNotifications
 
 
 class OptimisticTrackingSection(ttk.LabelFrame):
     def __init__(self, master, on_change=None, *, appearance=None):
         super().__init__(master, text="Optimistic Tracking")
         self.appearance = appearance if appearance is not None else ThemeMetrics(self)
-        self._on_change = on_change
-        self._loading = False
+        self.changes = ChangeNotifications(self, on_change)
         self.enabled = tk.BooleanVar(self, value=OptimisticTrackingSettings().enabled)
         self.variables = {
             name: tk.StringVar(self)
@@ -55,10 +56,9 @@ class OptimisticTrackingSection(ttk.LabelFrame):
             ), width=1, wraplength=self.appearance.pixels(420), justify="left",
         )
         self.hint.pack(fill="x")
-        for variable in (*self.variables.values(), self.enabled):
-            variable.trace_add("write", self._changed)
+        self.changes.watch(*self.variables.values(), self.enabled)
         self.bind("<Configure>", self._wrap_text)
-        self.bind("<<ThemeChanged>>", lambda _event: self.after_idle(self._refresh_layout))
+        self.theme_refresh = IdleRefresh(self, self._refresh_layout, event="<<ThemeChanged>>")
         self._refresh_layout()
 
     def _refresh_layout(self):
@@ -102,8 +102,7 @@ class OptimisticTrackingSection(ttk.LabelFrame):
         )}
 
     def load(self, data):
-        self._loading = True
-        try:
+        with self.changes.suspended():
             settings = data.optimistic_tracking
             values = {
                 "lookback": settings.lookback_seconds,
@@ -118,9 +117,3 @@ class OptimisticTrackingSection(ttk.LabelFrame):
             self.enabled.set(settings.enabled)
             for name, variable in self.variables.items():
                 variable.set(format(values[name], ".12g"))
-        finally:
-            self._loading = False
-
-    def _changed(self, *_args):
-        if not self._loading and self._on_change:
-            self._on_change()

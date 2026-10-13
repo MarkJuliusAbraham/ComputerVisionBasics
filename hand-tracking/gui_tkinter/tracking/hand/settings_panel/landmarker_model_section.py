@@ -5,13 +5,14 @@ from tkinter import filedialog, ttk
 
 from gui_tkinter.components.status_message import StatusMessage
 from landmarker import HandLandmarkerAsset
+from gui_tkinter.core.change_notifications import ChangeNotifications
 
 
 class LandmarkerModelSection(ttk.LabelFrame):
     def __init__(self, master, on_change=None, *, asset=None):
         super().__init__(master, text="Landmarker Model", padding=(12, 8, 12, 10))
         self.asset = asset if asset is not None else HandLandmarkerAsset()
-        self._on_change = on_change
+        self.changes = ChangeNotifications(self, on_change)
         self.path = tk.StringVar(self)
         self.variables = {"hand_landmarker_model_path": self.path}
         self._saved_path = ""
@@ -27,7 +28,7 @@ class LandmarkerModelSection(ttk.LabelFrame):
         self.feedback = StatusMessage(self)
         self.feedback.pack(fill="x", pady=(8, 0))
         self._set_message("Compatible MediaPipe Hand Landmarker .task bundles only.")
-        self.path.trace_add("write", lambda *_args: self._notify_change())
+        self.changes.watch(self.path)
 
     def browse(self):
         options = {}
@@ -54,10 +55,6 @@ class LandmarkerModelSection(ttk.LabelFrame):
         self.path.set("")
         self._set_message("Apply to unload the model and disable hand detection.")
 
-    def _notify_change(self):
-        if self._on_change:
-            self._on_change()
-
     def _set_message(self, message, invalid=False):
         self.feedback.set(message, warning=invalid)
 
@@ -66,7 +63,8 @@ class LandmarkerModelSection(ttk.LabelFrame):
 
     def load(self, data):
         self._saved_path = data.hand_landmarker_model_path
-        self.path.set(data.hand_landmarker_model_path)
+        with self.changes.suspended():
+            self.path.set(data.hand_landmarker_model_path)
         self._set_message("Compatible MediaPipe Hand Landmarker .task bundles only.")
         if self._runtime_status is not None:
             self.set_model_status(self._runtime_status)

@@ -1,11 +1,11 @@
 """Folder discovery and explicit confirmation of a gesture profile."""
 
 from pathlib import Path
-import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog
 
 from gestures.gesture_config import ensure_default_gesture_profile
 from gestures.profile_manager import GestureProfileManager
+from gui_tkinter.core.modal_dialog import ModalDialog
 
 from .profile_picker_view import ProfilePickerView
 
@@ -20,12 +20,8 @@ class GestureProfilePickerDialog:
         self.folder = Path(initial_folder)
         self.result = None
 
-        self.window = tk.Toplevel(parent)
-        self.window.title("Gesture profiles")
-        self.window.transient(parent)
-        self.window.resizable(False, False)
-        self.window.protocol("WM_DELETE_WINDOW", self._cancel)
-        self.window.bind("<Escape>", lambda _event: self._cancel())
+        self.modal = ModalDialog(parent, "Gesture profiles", base_size=(720, 560), on_close=self._cancel)
+        self.window = self.modal.window
         self.view = ProfilePickerView(
             self.window,
             on_browse=self._browse_folder,
@@ -37,26 +33,8 @@ class GestureProfilePickerDialog:
         self._load_folder(self.folder)
 
     def show(self):
-        self._center()
-        if not self.window.winfo_viewable():
-            self.window.wait_visibility()
-        self.window.grab_set()
-        self.window.wait_window()
+        self.modal.show(scale=self.view.appearance.scale)
         return self.result
-
-    def _center(self):
-        self.window.update_idletasks()
-        screen_width = self.window.winfo_screenwidth()
-        screen_height = self.window.winfo_screenheight()
-        margin = round(16 * self.view.scale)
-        preferred_width, preferred_height = self.view.preferred_size
-        width = min(preferred_width, max(1, screen_width - 2 * margin))
-        height = min(preferred_height, max(1, screen_height - margin - 48))
-        x = self.parent.winfo_rootx() + (self.parent.winfo_width() - width) // 2
-        y = self.parent.winfo_rooty() + (self.parent.winfo_height() - height) // 2
-        x = max(margin, min(x, screen_width - width - margin))
-        y = max(margin, min(y, screen_height - height - 48))
-        self.window.geometry(f"{width}x{height}+{x}+{y}")
 
     def _load_folder(self, folder, selected_profile=None):
         try:
@@ -113,4 +91,3 @@ class GestureProfilePickerDialog:
 
     def _cancel(self):
         self.window.destroy()
-

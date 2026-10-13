@@ -2,6 +2,8 @@
 
 import tkinter as tk
 from tkinter import ttk
+from gui_tkinter.core.idle_refresh import IdleRefresh
+from gui_tkinter.core.change_notifications import ChangeNotifications
 
 from .movement_draft import MovementSettingsDraft
 
@@ -41,7 +43,7 @@ class AxisWeightsControl(ttk.Frame):
             spin = ttk.Spinbox(group, textvariable=variable, from_=0, to=10, increment=0.25, width=6)
             spin.pack(side="left")
             self.inputs.append((group, spin))
-        self.bind("<<ThemeChanged>>", lambda _event: self.after_idle(self.refresh_layout))
+        self.theme_refresh = IdleRefresh(self, self.refresh_layout, event="<<ThemeChanged>>")
         self.refresh_layout()
 
     def refresh_layout(self):
@@ -60,8 +62,7 @@ class MovementSettingsControls(ttk.Frame):
     ):
         super().__init__(master)
         self.appearance = appearance
-        self._on_change = on_change
-        self._loading = False
+        self.changes = ChangeNotifications(self, on_change)
         self.include_interval = include_interval
         defaults = MovementSettingsDraft.defaults()
         self._interval = defaults.min_interval_seconds
@@ -90,9 +91,8 @@ class MovementSettingsControls(ttk.Frame):
             self, {name: self.variables[name] for name in ("x", "y", "z")}, appearance,
         )
         self.axes.pack(fill="x")
-        for variable in self.variables.values():
-            variable.trace_add("write", self._changed)
-        self.bind("<<ThemeChanged>>", lambda _event: self.after_idle(self._refresh_layout))
+        self.changes.watch(*self.variables.values())
+        self.theme_refresh = IdleRefresh(self, self._refresh_layout, event="<<ThemeChanged>>")
         self._refresh_layout()
 
     def _refresh_layout(self):
@@ -118,15 +118,8 @@ class MovementSettingsControls(ttk.Frame):
         return MovementSettingsDraft(**values, min_interval_seconds=interval)
 
     def load(self, draft):
-        self._loading = True
-        try:
+        with self.changes.suspended():
             self._interval = draft.min_interval_seconds
             for name, variable in self.variables.items():
                 value = format(self._interval * 1000, ".12g") if name == "interval" else getattr(draft, name)
                 variable.set(value)
-        finally:
-            self._loading = False
-
-    def _changed(self, *_args):
-        if not self._loading and self._on_change:
-            self._on_change()
