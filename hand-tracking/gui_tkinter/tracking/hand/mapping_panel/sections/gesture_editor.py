@@ -1,7 +1,8 @@
 """Selected gesture details independent of profile and list navigation."""
 
-from gui_tkinter.core.idle_refresh import IdleRefresh
 from tkinter import ttk
+
+from gui_tkinter.core.scaled_layout import ScaledLayout
 
 from ..gesture_draft import GestureDraft
 from .command_sequence import CommandSequenceSection
@@ -15,32 +16,28 @@ class GestureEditorSection(ttk.Frame):
     def __init__(self, master, appearance, on_change=None, segment_count=4, *, on_repeat_change=None):
         super().__init__(master)
         self.appearance = appearance
-        self.heading = GestureHeading(self, appearance)
+        self.layout = ScaledLayout(self, appearance)
+        self.heading = self.layout.pack(GestureHeading(self, appearance), fill="x", pady=(0, 14))
         self.name = self.heading.name
-        self.heading.pack(fill="x", pady=(0, appearance.pixels(14)))
-        self.criteria_card = GestureSection(self, appearance, on_change, segment_count)
-        self.criteria_card.pack(fill="x", pady=(0, appearance.pixels(18)))
-        self.tracking = GestureTrackingSection(self, on_change=on_change, appearance=appearance)
-        self.tracking.pack(fill="x", pady=(0, appearance.pixels(18)))
-        self.sequence = CommandSequenceSection(self, on_change=on_change, appearance=appearance)
-        self.sequence.pack(fill="x", pady=(0, appearance.pixels(18)))
-        self.repeats = RepeatCommandsSection(self, appearance, on_change=on_repeat_change)
-        self.repeats.pack(fill="x")
+        self.criteria_card = self.layout.pack(
+            GestureSection(self, appearance, on_change, segment_count), fill="x", pady=(0, 18),
+        )
+        self.tracking = self.layout.pack(
+            GestureTrackingSection(self, on_change=on_change, appearance=appearance), fill="x", pady=(0, 18),
+        )
+        self.sequence = self.layout.pack(
+            CommandSequenceSection(self, on_change=on_change, appearance=appearance), fill="x", pady=(0, 18),
+        )
+        self.repeats = self.layout.pack(
+            RepeatCommandsSection(self, appearance, on_change=on_repeat_change), fill="x",
+        )
+        self.sections = (self.heading, self.criteria_card, self.tracking, self.sequence, self.repeats)
         self.empty = ttk.Label(
             self, text="No gestures in this profile. Use Manage gestures to create one.",
             wraplength=500,
         )
-        self.theme_refresh = IdleRefresh(self, self._refresh_layout, event="<<ThemeChanged>>")
-
-    def _refresh_layout(self):
-        self.appearance.refresh()
-        pixels = self.appearance.pixels
-        self.criteria_card.configure(padding=pixels(16))
-        if self.heading.winfo_manager():
-            self.heading.pack_configure(pady=(0, pixels(14)))
-            self.criteria_card.pack_configure(pady=(0, pixels(18)))
-            self.tracking.pack_configure(pady=(0, pixels(18)))
-            self.sequence.pack_configure(pady=(0, pixels(18)))
+        self.layout.pack(self.empty, anchor="w", pady=16)
+        self.empty.pack_forget()
 
     @property
     def segment_count(self):
@@ -52,17 +49,13 @@ class GestureEditorSection(ttk.Frame):
     def show_gesture(self, name):
         self.name.set(name or "")
         if name is None:
-            for widget in (self.heading, self.criteria_card, self.tracking, self.sequence, self.repeats):
+            for widget in self.sections:
                 widget.pack_forget()
-            self.empty.pack(anchor="w", pady=self.appearance.pixels(16))
+            self.layout.show(self.empty)
         else:
             self.empty.pack_forget()
             if not self.heading.winfo_manager():
-                self.heading.pack(fill="x", pady=(0, self.appearance.pixels(14)))
-                self.criteria_card.pack(fill="x", pady=(0, self.appearance.pixels(18)))
-                self.tracking.pack(fill="x", pady=(0, self.appearance.pixels(18)))
-                self.sequence.pack(fill="x", pady=(0, self.appearance.pixels(18)))
-                self.repeats.pack(fill="x")
+                self.layout.show(*self.sections)
 
     def show_conflict(self, conflict, names):
         self.heading.show_conflict(conflict, names)

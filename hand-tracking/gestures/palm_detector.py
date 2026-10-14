@@ -1,29 +1,32 @@
 ﻿from enum import Enum
 
 from .geometry import cross, vector
+from .hand_landmarks import Landmark
 
 
 class PalmPosition(Enum):
     FACING_CAMERA = "facing_camera"
     NOT_FACING_CAMERA = "not_facing_camera"
 
+    @property
+    def label(self) -> str:
+        """Sentence-case display text, e.g. "Not facing camera"."""
+        return self.value.replace("_", " ").capitalize()
+
 
 class PalmDetector:
-    WRIST = 0
-    INDEX_MCP = 5
-    PINKY_MCP = 17
-
     def detect(
         self,
         hand,
         handedness: str,
+        aspect: float = 1.0,
     ) -> PalmPosition:
-        wrist = hand[self.WRIST]
-        index = hand[self.INDEX_MCP]
-        pinky = hand[self.PINKY_MCP]
+        wrist = hand[Landmark.WRIST]
+        index = hand[Landmark.INDEX_MCP]
+        pinky = hand[Landmark.PINKY_MCP]
 
-        v1 = vector(wrist, index)
-        v2 = vector(wrist, pinky)
+        v1 = vector(wrist, index, aspect)
+        v2 = vector(wrist, pinky, aspect)
 
         normal_z = cross(v1, v2)[2]
 

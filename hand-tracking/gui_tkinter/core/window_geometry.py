@@ -21,13 +21,20 @@ class WindowGeometry:
         self.size = (width, height)
         self.window.geometry(f"{width}x{height}")
 
+    # Space kept clear for the taskbar below placed windows.
+    TASKBAR_MARGIN = 48
+
+    def _move_on_screen(self, x, y, width, height):
+        """Place the window at (x, y), clamped to the visible screen."""
+        x = min(max(x, 0), max(0, self.window.winfo_screenwidth() - width))
+        y = min(max(y, 0), max(0, self.window.winfo_screenheight() - height - self.TASKBAR_MARGIN))
+        self.window.geometry(f"+{x}+{y}")
+
     def place_near(self, parent):
         """Set the initial position only, before the window is first shown."""
         self.window.update_idletasks()
         width, height = self.size or (self.window.winfo_width(), self.window.winfo_height())
-        x = min(parent.winfo_rootx() + 32, self.window.winfo_screenwidth() - width)
-        y = min(parent.winfo_rooty() + 32, self.window.winfo_screenheight() - height - 48)
-        self.window.geometry(f"+{max(x, 0)}+{max(y, 0)}")
+        self._move_on_screen(parent.winfo_rootx() + 32, parent.winfo_rooty() + 32, width, height)
 
     def center_over(self, parent, *, requested=False):
         """Center once at opening, clamping placement to the visible screen."""
@@ -36,8 +43,8 @@ class WindowGeometry:
             (self.window.winfo_reqwidth(), self.window.winfo_reqheight()) if requested else
             self.size or (self.window.winfo_width(), self.window.winfo_height())
         )
-        x = parent.winfo_rootx() + (parent.winfo_width() - width) // 2
-        y = parent.winfo_rooty() + (parent.winfo_height() - height) // 2
-        x = min(max(x, 0), max(0, self.window.winfo_screenwidth() - width))
-        y = min(max(y, 0), max(0, self.window.winfo_screenheight() - height - 48))
-        self.window.geometry(f"+{x}+{y}")
+        self._move_on_screen(
+            parent.winfo_rootx() + (parent.winfo_width() - width) // 2,
+            parent.winfo_rooty() + (parent.winfo_height() - height) // 2,
+            width, height,
+        )

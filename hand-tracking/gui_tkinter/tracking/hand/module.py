@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import tkinter as tk
+from tkinter import messagebox
 from dataclasses import dataclass
 from typing import Callable
 
@@ -12,9 +13,11 @@ from gui_tkinter.core.state import ControlCallbacks, PanelSet, WindowContext
 from gui_tkinter.tracking.window import TrackingWindow
 from landmarker import HandLandmarkerAsset
 from settings.settings_manager import Settings
+from settings.overlay_settings import OverlaySettings
 
 from .debug_panel import HandDebugPanel
 from .mapping_panel import MappingPanel
+from .overlay.hand_tracking_overlay import HandTrackingOverlay
 from .settings_panel import HandSettingsPanel
 
 
@@ -38,14 +41,26 @@ class HandTrackingModule:
     ) -> None:
         self.settings = settings
         self.actions = actions
-        self.debug = HandDebugPanel(on_open_settings=self.open_settings)
+        self.debug = HandDebugPanel(
+            on_open_settings=self.open_settings, on_toggle_overlay=self.toggle_overlay,
+            on_overlay_options=self.open_overlay_options,
+        )
         self.settings_panel = HandSettingsPanel(on_apply=actions.apply_settings, model_asset=model_asset)
         self.mapping = MappingPanel(
             on_saved=actions.apply_mapping, segment_count=settings.data.finger_segment_count,
         )
         self.window: TrackingWindow | None = None
+        self.overlay: HandTrackingOverlay | None = None
+        self._debug_active = False
 
     def open(self, parent: tk.Misc) -> None:
+        if self.overlay is None:
+            self.overlay = HandTrackingOverlay(
+                parent,
+                max_deviation=self.settings.data.max_finger_deviation,
+                preferences=self.settings.data.hand_overlay, on_save=self.save_overlay_preferences,
+            )
+            self._publish_report()
         if self.window is None:
             context = WindowContext(
                 self.settings,
@@ -53,12 +68,49 @@ class HandTrackingModule:
                     on_restart=self.actions.restart, on_close=self.close,
                     on_apply=self.actions.apply_settings,
                     on_toggle_tracking=self.actions.toggle_pause,
-                    on_main_active=self.actions.activity_changed,
+                    on_main_active=self._set_debug_active,
                 ),
                 PanelSet(self.debug, self.settings_panel, self.mapping),
             )
             self.window = TrackingWindow(parent, context, self.name)
         self.window.show()
+
+    @property
+    def overlay_active(self) -> bool:
+        return self.overlay is not None and self.overlay.enabled
+
+    def _set_debug_active(self, active: bool) -> None:
+        self._debug_active = active
+        self._notify_activity()
+
+    def open_overlay_options(self) -> None:
+        if self.overlay is not None and self.debug.widget is not None:
+            self.overlay.show_options(self.debug.widget.winfo_toplevel())
+
+    def save_overlay_preferences(self, preferences: OverlaySettings) -> None:
+        self.settings.update_fields({"hand_overlay": preferences})
+        self.settings_panel.rebase(self.settings, ("hand_overlay",))
+
+    def _notify_activity(self) -> None:
+        self.actions.activity_changed(self._debug_active or self.overlay_active)
+
+    def toggle_overlay(self) -> None:
+        if self.overlay is None:
+            return
+        if self.overlay.enabled:
+            self.overlay.close()
+        else:
+            try:
+                self.overlay.enable()
+            except (OSError, tk.TclError, RuntimeError) as error:
+                assert self.debug.widget is not None
+                messagebox.showerror(
+                    "Could not enable overlay", str(error),
+                    parent=self.debug.widget.winfo_toplevel(),
+                )
+                return
+        self.debug.set_overlay_enabled(self.overlay.enabled)
+        self._notify_activity()
 
     def open_settings(self) -> None:
         if self.window is not None:
@@ -71,16 +123,28 @@ class HandTrackingModule:
             and self.settings_panel.tracking_preview_active
         )
 
+    def _publish_report(self) -> None:
+        """Show the debugging panel's current report on the desktop overlay."""
+        if self.overlay is not None:
+            self.overlay.update_data(self.debug.data)
+
     def update_data(self, records, enabled, paused):
         self.debug.update_gesture_display(records, enabled, paused)
+        self._publish_report()
         self.settings_panel.set_preview_data(self.debug.preview_fingers, self.debug.preview_status)
 
     def set_model_status(self, status):
         self.debug.set_model_status(status)
+        self._publish_report()
         self.settings_panel.set_model_status(status)
 
     def synchronize(self, settings, changed_fields):
-        self.debug.set_display(settings.data.theme, settings.data.finger_classification_thresholds[-1])
+        max_deviation = settings.data.max_finger_deviation
+        self.debug.set_display(settings.data.theme, max_deviation)
+        if self.overlay is not None:
+            self.overlay.set_display(max_deviation)
+            if self.overlay.saved_preferences != settings.data.hand_overlay:
+                self.overlay.load_preferences(settings.data.hand_overlay)
         if self.mapping.segment_count != settings.data.finger_segment_count:
             self.mapping.set_segment_count(settings.data.finger_segment_count)
         self.settings_panel.rebase(settings, changed_fields)
@@ -90,13 +154,21 @@ class HandTrackingModule:
         self.synchronize(settings, ())
 
     def confirm_close(self) -> bool:
-        return self.window is None or self.window.confirm_close()
+        return (
+            (self.window is None or self.window.confirm_close())
+            and (self.overlay is None or self.overlay.confirm_close())
+        )
 
     def resize(self, scale: float) -> None:
         if self.window is not None:
             self.window.resize(scale)
+        if self.overlay is not None:
+            self.overlay.refresh()
 
     def close(self) -> None:
+        if self.overlay is not None:
+            self.overlay.shutdown()
+        self._debug_active = False
         if self.window is not None:
             self.window.close()
             self.window = None

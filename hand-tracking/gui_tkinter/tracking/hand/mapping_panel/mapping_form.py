@@ -1,7 +1,7 @@
 """Profile header, gesture browser, focused editor, and persistent actions."""
 
 from tkinter import ttk
-from gui_tkinter.core.idle_refresh import IdleRefresh
+from gui_tkinter.core.scaled_layout import ScaledLayout
 
 from gestures.gesture_validation import GestureValidationReport
 from gui_tkinter.components.scrollable_frame import ScrollableFrame
@@ -23,12 +23,16 @@ class MappingForm(ttk.Frame):
         self._reset_match = None
         self._selected_id = None
         self._validation = GestureValidationReport({})
-        self.profile = ProfileSection(self, on_choose=callbacks.on_choose_profile)
-        self.profile.pack(fill="x", pady=(0, self.appearance.pixels(16)))
-        self.divider = ttk.Separator(self)
-        self.divider.pack(fill="x", pady=(0, self.appearance.pixels(16)))
-        self.footer = MappingFooter(self, self.appearance, callbacks.on_save, callbacks.on_discard)
-        self.footer.pack(side="bottom", fill="x", pady=(self.appearance.pixels(16), 0))
+        layout = self.layout = ScaledLayout(self, self.appearance)
+        layout.configure(self, padding=16)
+        self.profile = layout.pack(
+            ProfileSection(self, on_choose=callbacks.on_choose_profile), fill="x", pady=(0, 16),
+        )
+        self.divider = layout.pack(ttk.Separator(self), fill="x", pady=(0, 16))
+        self.footer = layout.pack(
+            MappingFooter(self, self.appearance, callbacks.on_save, callbacks.on_discard),
+            side="bottom", fill="x", pady=(16, 0),
+        )
         workspace = ttk.Frame(self)
         workspace.pack(fill="both", expand=True)
         workspace.columnconfigure(1, weight=1)
@@ -38,26 +42,14 @@ class MappingForm(ttk.Frame):
             on_manage=callbacks.on_manage, on_reset=callbacks.on_edit_reset,
             on_rename=callbacks.on_rename, on_delete=callbacks.on_delete,
         )
-        self.browser.grid(row=0, column=0, sticky="ns", padx=(0, self.appearance.pixels(20)))
+        layout.grid(self.browser, row=0, column=0, sticky="ns", padx=(0, 20))
         self.scroll = ScrollableFrame(workspace)
         self.scroll.grid(row=0, column=1, sticky="nsew")
         self.editor = GestureEditorSection(
             self.scroll.content, self.appearance, callbacks.on_change, segment_count,
             on_repeat_change=callbacks.on_repeat_change,
         )
-        self.editor.pack(fill="x", padx=(0, self.appearance.pixels(8)))
-        self._refresh_layout()
-        self.theme_refresh = IdleRefresh(self, self._refresh_layout, event="<<ThemeChanged>>")
-
-    def _refresh_layout(self):
-        self.appearance.refresh()
-        pixels = self.appearance.pixels
-        self.configure(padding=pixels(16))
-        self.profile.pack_configure(pady=(0, pixels(16)))
-        self.divider.pack_configure(pady=(0, pixels(16)))
-        self.footer.pack_configure(pady=(pixels(16), 0))
-        self.browser.grid_configure(padx=(0, pixels(20)))
-        self.editor.pack_configure(padx=(0, pixels(8)))
+        layout.pack(self.editor, fill="x", padx=(0, 8))
 
     @property
     def segment_count(self):

@@ -5,7 +5,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from gui_tkinter.core.change_notifications import ChangeNotifications
-from gui_tkinter.core.idle_refresh import IdleRefresh
+from gui_tkinter.core.scaled_layout import ScaledLayout
 
 from .theme import ThemeMetrics
 
@@ -28,15 +28,14 @@ class FieldSection(ttk.LabelFrame):
         self.changes = ChangeNotifications(self, on_change)
         self.fields = tuple(fields)
         self.variables = {}
+        self.layout = ScaledLayout(self, self.appearance)
+        self.layout.configure(self, padding=(12, 8, 12, 10))
         self.rows = []
         for field in self.fields:
             self._add_field(field)
-        self.theme_refresh = IdleRefresh(self, self._refresh_layout, event="<<ThemeChanged>>")
-        self._refresh_layout()
 
     def _add_field(self, field):
-        row = ttk.Frame(self)
-        row.pack(fill="x")
+        row = self.layout.pack(ttk.Frame(self), fill="x", pady=4)
         row.columnconfigure(0, weight=1)
         self.rows.append(row)
         if field.kind == "check":
@@ -45,7 +44,7 @@ class FieldSection(ttk.LabelFrame):
         else:
             # Preserve incomplete numeric input until Apply validates it.
             variable = tk.StringVar(self)
-            ttk.Label(row, text=field.label).grid(row=0, column=0, sticky="w")
+            self.layout.grid(ttk.Label(row, text=field.label), row=0, column=0, sticky="w", padx=(0, 12))
             if field.kind == "number":
                 control = ttk.Spinbox(
                     row, textvariable=variable, from_=field.minimum, to=field.maximum,
@@ -61,16 +60,6 @@ class FieldSection(ttk.LabelFrame):
         self.variables[field.key] = variable
         # One trace covers typing, arrow clicks, and dropdown selection.
         self.changes.watch(variable)
-
-    def _refresh_layout(self):
-        self.appearance.refresh()
-        pixels = self.appearance.pixels
-        self.configure(padding=(pixels(12), pixels(8), pixels(12), pixels(10)))
-        for row in self.rows:
-            row.pack_configure(pady=pixels(4))
-            for child in row.winfo_children():
-                if isinstance(child, ttk.Label):
-                    child.grid_configure(padx=(0, pixels(12)))
 
     def draft_values(self):
         return {key: variable.get() for key, variable in self.variables.items()}

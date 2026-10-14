@@ -3,17 +3,18 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from gestures.finger_classifier import FINGER_POSITIONS, FINGERS
+from gestures.finger_classifier import FINGER_POSITIONS
+from gestures.hand_landmarks import FINGER_NAMES
 from gestures.palm_detector import PalmPosition
 from gestures.gesture_validation import GestureCriteriaValidator
 from gestures.repeating.settings import RepeatSettings
 from gestures.tracking.settings import GestureTrackingSettings
+from json_storage import write_json_atomic
 
 
 DEFAULT_GESTURE_PROFILE_DIR = Path(__file__).resolve().parents[1] / "gesture_profiles"
 DEFAULT_GESTURE_CONFIG = DEFAULT_GESTURE_PROFILE_DIR / "invoker_profile.json"
 DEFAULT_GESTURE_TEMPLATE = Path(__file__).with_name("default_gesture_profile.json")
-FINGER_NAMES = set(FINGERS)
 PALM_POSITIONS = {position.value for position in PalmPosition}
 
 
@@ -137,6 +138,15 @@ class GestureConfig:
     reset_match: GestureMatch
     repeat_settings: RepeatSettings = RepeatSettings()
 
+    @property
+    def criteria(self):
+        """Each gesture's hand criteria, keyed by gesture id."""
+        return {definition.id: definition.match for definition in self.definitions}
+
+    def validation_report(self, validator=None):
+        validator = validator if validator is not None else GestureCriteriaValidator()
+        return validator.validate(self.criteria, self.reset_match)
+
     def to_dict(self):
         return {
             "version": 1,
@@ -146,16 +156,15 @@ class GestureConfig:
         }
 
     def save(self, path=DEFAULT_GESTURE_CONFIG, *, allow_conflicts=False):
-        # Validate through the same parser used at startup before replacing a
-        # profile, including commands, reset criteria, and repeat settings.
-        self.from_dict(self.to_dict(), allow_conflicts=allow_conflicts)
-        target = Path(path)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        temporary = target.with_name(target.name + ".tmp")
-        with open(temporary, "w", encoding="utf-8") as file:
-            json.dump(self.to_dict(), file, indent=2)
-            file.write("\n")
-        temporary.replace(target)
+        """Validate, write, and return the profile exactly as it will load.
+
+        The same parser used at startup checks commands, reset criteria, and
+        repeat settings before the existing profile is replaced.
+        """
+        data = self.to_dict()
+        validated = self.from_dict(data, allow_conflicts=allow_conflicts)
+        write_json_atomic(path, data)
+        return validated
 
     @classmethod
     def load(cls, path=DEFAULT_GESTURE_CONFIG):
@@ -237,9 +246,7 @@ class GestureConfig:
 
     @staticmethod
     def _validate_no_conflicts(definitions, reset_match):
-        report = GestureCriteriaValidator().validate(
-            {definition.id: definition.match for definition in definitions}, reset_match,
-        )
+        report = GestureConfig(tuple(definitions), reset_match).validation_report()
         if report.conflicts:
             gesture_id = next(iter(report.conflicts))
             names = {definition.id: definition.name for definition in definitions}
@@ -260,6 +267,11 @@ class GestureConfig:
             if not first_allowed.intersection(second_allowed):
                 return False
         return True
+
+
+def find_definition(definitions, gesture_id):
+    """Return the definition with ``gesture_id``, or None."""
+    return next((definition for definition in definitions if definition.id == gesture_id), None)
 
 
 def ensure_default_gesture_profile(folder=DEFAULT_GESTURE_PROFILE_DIR):

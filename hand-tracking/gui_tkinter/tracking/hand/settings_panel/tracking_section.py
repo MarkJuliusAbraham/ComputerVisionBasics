@@ -1,5 +1,6 @@
 """Hand-specific detection controls."""
 
+from gestures.finger_classifier import FingerClassifier
 from gui_tkinter.components.field_section import FieldSection, FieldSpec
 
 from .deviation_settings import DeviationSettings
@@ -10,7 +11,7 @@ class TrackingSection(FieldSection):
         super().__init__(master, "Hand tracking", (
             FieldSpec("track_hands", "Enable hand tracking", "check"),
             FieldSpec("finger_deviation_calculation", "Deviation calculation", "choice",
-                      options=("default", "prototype")),
+                      options=FingerClassifier.CALCULATIONS),
         ), on_change)
         self.deviation = DeviationSettings(
             self, theme_name, max_deviation, on_change=self.changes.emit,

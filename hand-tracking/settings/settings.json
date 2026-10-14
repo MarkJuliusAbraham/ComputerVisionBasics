@@ -28,5 +28,13 @@
         "z": 0.0
       }
     }
+  },
+  "hand_overlay": {
+    "style": "Simple",
+    "background_opacity": 0.01,
+    "position": {
+      "x": 17,
+      "y": 15
+    }
   }
 }

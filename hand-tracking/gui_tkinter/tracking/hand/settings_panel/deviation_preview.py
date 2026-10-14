@@ -1,10 +1,11 @@
 """Interactive deviation preview used by the tracking settings section."""
 
+from dataclasses import replace
 import tkinter as tk
 from tkinter import ttk
 
+from gestures.finger_thresholds import FingerThresholds
 from gui_tkinter.components.deviation_bar import DeviationBar
-from gestures.finger_classifier import FingerClassifier, FingerState, finger_categories
 
 
 class DeviationPreview(ttk.Frame):
@@ -18,8 +19,7 @@ class DeviationPreview(ttk.Frame):
         self._visible = False
         self._theme_name = theme_name
         self._max_deviation = max_deviation
-        self._thresholds = (15.0, 45.0, 75.0)
-        self._segment_count = 4
+        self._thresholds = FingerThresholds.defaults()
         self._latest_fingers = None
         self._latest_status = "No hand detected"
 
@@ -66,22 +66,18 @@ class DeviationPreview(ttk.Frame):
         if self._visible:
             self._render()
 
-    def set_thresholds(self, thresholds, segment_count, max_deviation=None):
-        self._thresholds = tuple(float(value) for value in thresholds)
-        self._segment_count = segment_count
-        if max_deviation is not None:
-            self._max_deviation = max_deviation
+    def set_thresholds(self, thresholds: FingerThresholds):
+        """Classify with the edited ranges; the last split sets the bar scale."""
+        self._thresholds = thresholds
+        self._max_deviation = thresholds.max_deviation
         if self._visible:
             self._render()
 
     def _render(self):
-        categories = finger_categories(self._segment_count)
-        fingers = {}
-        for name, finger in (self._latest_fingers or {}).items():
-            position = FingerClassifier.classify_deviation(
-                finger.deviation, self._thresholds, categories
-            )
-            fingers[name] = FingerState(finger.deviation, position, finger.tip)
+        fingers = {
+            name: replace(finger, position=self._thresholds.classify(finger.deviation))
+            for name, finger in (self._latest_fingers or {}).items()
+        }
 
         self.status.set(self._latest_status)
         self.bar.set_data(

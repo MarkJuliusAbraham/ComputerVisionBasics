@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from gui_tkinter.core.idle_refresh import IdleRefresh
 
 from ..criteria_options import (
-    CUSTOM_CLASSIFICATIONS, FINGER_NAMES, FINGER_OPTIONS, FingerCriteriaOptions,
+    CATEGORY_LABELS, CUSTOM_CLASSIFICATIONS, FINGER_NAMES, FingerCriteriaOptions,
 )
 
 
@@ -64,8 +64,7 @@ class FingerCriteriaLayout:
         simple_width = max(appearance.font.measure(label) for label in simple_labels)
         simple_width += appearance.pixels(44)
         heading_words = ["(inactive)"] + [
-            word for position in FINGER_OPTIONS
-            for word in position.replace("_", " ").title().split()
+            word for label in CATEGORY_LABELS.values() for word in label.title().split()
         ]
         column_hint = max(appearance.heading_font.measure(word) for word in heading_words)
         column_hint += appearance.pixels(16)
@@ -74,6 +73,6 @@ class FingerCriteriaLayout:
             heading_height=heading_height,
             row_height=row_height,
             divider_height=divider_height,
-            preferred_width=label_width + max(simple_width, len(FINGER_OPTIONS) * column_hint),
+            preferred_width=label_width + max(simple_width, len(CATEGORY_LABELS) * column_hint),
             height=heading_height + len(FINGER_NAMES) * (row_height + divider_height),
         )

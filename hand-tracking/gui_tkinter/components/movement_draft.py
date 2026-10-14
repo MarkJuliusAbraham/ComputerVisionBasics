@@ -1,8 +1,47 @@
-"""Shared editable movement settings, including unfinished numeric input."""
+"""Shared editable movement settings, including unfinished numeric input.
+
+Forms keep the text the user typed; these helpers convert between that text
+and the validated settings records in one place.
+"""
 
 from dataclasses import dataclass
 
-from gestures.repeating.settings import AxisWeights, RepeatSettings
+from gestures.repeating.settings import AXES, AxisWeights, MovementBufferSettings, RepeatSettings
+
+
+def number_text(value):
+    """Display a stored number without float noise (0.30000000000000004 -> 0.3)."""
+    return format(value, ".12g")
+
+
+def percent_text(fraction):
+    return number_text(fraction * 100)
+
+
+def parse_numbers(texts, message):
+    """Convert every entry to float, reporting one message for any bad entry."""
+    try:
+        return {name: float(text) for name, text in texts.items()}
+    except (TypeError, ValueError) as error:
+        raise ValueError(message) from error
+
+
+def buffer_texts(movement: MovementBufferSettings, axes=AXES):
+    """Form text for the starting buffer, its credit, and the chosen axes."""
+    return {
+        "buffer": percent_text(movement.initial_displacement),
+        "credit": percent_text(movement.buffer_credit),
+        **{axis: number_text(getattr(movement.axis_weights, axis)) for axis in axes},
+    }
+
+
+def buffer_from_numbers(numbers, axes=AXES) -> MovementBufferSettings:
+    """Build buffer settings from parsed form numbers (percentages for the buffer)."""
+    return MovementBufferSettings(
+        initial_displacement=numbers["buffer"] / 100,
+        buffer_credit=numbers["credit"] / 100,
+        axis_weights=AxisWeights(**{axis: numbers[axis] for axis in axes}),
+    )
 
 
 @dataclass(frozen=True)
@@ -23,13 +62,10 @@ class MovementSettingsDraft:
     @classmethod
     def from_settings(cls, settings):
         return cls(
-            distance=format(settings.distance_threshold * 100, ".12g"),
-            buffer=format(settings.initial_displacement * 100, ".12g"),
-            credit=format(settings.buffer_credit * 100, ".12g"),
+            distance=percent_text(settings.distance_threshold),
             limit=str(settings.max_repeats),
-            x=str(settings.axis_weights.x), y=str(settings.axis_weights.y),
-            z=str(settings.axis_weights.z),
             min_interval_seconds=settings.min_interval_seconds,
+            **buffer_texts(settings.movement),
         )
 
     def to_settings(self):
@@ -37,17 +73,14 @@ class MovementSettingsDraft:
             limit = int(self.limit)
         except ValueError as error:
             raise ValueError("Repeat limit must be a whole number") from error
-        try:
-            distance, buffer, credit, x, y, z = (
-                float(value) for value in (self.distance, self.buffer, self.credit, self.x, self.y, self.z)
-            )
-        except ValueError as error:
-            raise ValueError("Repeat distances, buffer credit, and axis weights must be numbers") from error
+        numbers = parse_numbers(
+            {"distance": self.distance, "buffer": self.buffer, "credit": self.credit,
+             **{axis: getattr(self, axis) for axis in AXES}},
+            "Repeat distances, buffer credit, and axis weights must be numbers",
+        )
         return RepeatSettings(
-            initial_displacement=buffer / 100,
-            distance_threshold=distance / 100,
-            buffer_credit=credit / 100,
+            distance_threshold=numbers["distance"] / 100,
             max_repeats=limit,
-            axis_weights=AxisWeights(x=x, y=y, z=z),
             min_interval_seconds=self.min_interval_seconds,
+            movement=buffer_from_numbers(numbers),
         )

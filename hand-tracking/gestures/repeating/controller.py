@@ -39,7 +39,7 @@ class MovementRepeatController:
         settings = definition.repeat_settings
         if not settings.max_repeats:
             return
-        metric = WeightedDistance(settings.axis_weights, frame_aspect)
+        metric = WeightedDistance(settings.movement.axis_weights, frame_aspect)
         origins = {}
         for name in definition.tracking.fingers:
             finger = state.fingers.get(name)
@@ -47,7 +47,7 @@ class MovementRepeatController:
                 origins[name] = tuple(finger.tip)
         progress = None
         if origins and len(origins) == len(definition.tracking.fingers):
-            progress = AverageDistanceAccumulator(origins, metric, settings)
+            progress = AverageDistanceAccumulator(origins, metric, settings.movement)
         self._instance = RepeatInstance(definition, progress, self.clock())
 
     def reserve_optimistic(self, requested):

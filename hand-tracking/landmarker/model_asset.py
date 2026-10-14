@@ -22,11 +22,15 @@ class HandLandmarkerAsset:
         selected = Path(path).expanduser()
         return selected.resolve() if selected.is_absolute() else (PROJECT_ROOT / selected).resolve()
 
-    def validate_path(self, path):
-        """Perform inexpensive structural validation before accepting a selection."""
+    def _resolve_bundle(self, path):
         selected = self.resolve(path)
         if selected.suffix.lower() != ".task":
             raise ValueError("Choose a MediaPipe Hand Landmarker .task bundle.")
+        return selected
+
+    def validate_path(self, path):
+        """Perform inexpensive structural validation before accepting a selection."""
+        selected = self._resolve_bundle(path)
         try:
             with ZipFile(selected) as bundle:
                 self._validate_bundle(bundle)
@@ -36,9 +40,7 @@ class HandLandmarkerAsset:
 
     def read(self, path):
         """Validate the exact bytes that the runtime will load, without extracting files."""
-        selected = self.resolve(path)
-        if selected.suffix.lower() != ".task":
-            raise ValueError("Choose a MediaPipe Hand Landmarker .task bundle.")
+        selected = self._resolve_bundle(path)
         try:
             data = selected.read_bytes()
             with ZipFile(BytesIO(data)) as bundle:

@@ -7,8 +7,9 @@ from settings.theme_choices import resolve_theme
 
 from .themes.buttons import ButtonTheme
 from .themes.nier_automata import NierAutomataTheme
-from .themes.palettes import PALETTES
+from .themes.palettes import PALETTES, ClassificationPalette
 from .themes.popups import PopupTheme
+from .themes.scaling import scale_pixels
 from .themes.title_bar import TitleBarPalette, TitleBarTheme
 from .themes.typography import ThemeTypography
 
@@ -29,6 +30,13 @@ _system_scale = None
 class AlertPalette:
     foreground: str
     selection_background: str
+
+
+@dataclass(frozen=True)
+class OverlayTextPalette:
+    """Keep dark overlay lettering readable when its pale surface fades."""
+
+    outline: str | None
 
 
 class ThemeColors:
@@ -54,6 +62,10 @@ class ThemeColors:
     def destructive(self):
         """Filled destructive action colors, separate from warning text."""
         return self.palette.destructive
+
+    @property
+    def overlay_text(self) -> OverlayTextPalette:
+        return OverlayTextPalette(None if self.choice.dark else self.palette.panel)
 
     @property
     def title_bar(self):
@@ -108,7 +120,7 @@ class ThemeMetrics:
                 variant.configure(**variant_attributes)
 
     def pixels(self, value):
-        return round(value * self.scale)
+        return scale_pixels(value, self.scale)
 
 
 def system_scale(root):
@@ -127,37 +139,27 @@ def resolve_scale(root, value):
     return int(value.rstrip("%")) / 100
 
 
-def gesture_classification_color(theme_name, classification):
-    """Return the active theme's semantic color for a finger classification."""
-    palette = PALETTES[resolve_theme(theme_name).name].deviation
-    return palette.color(classification).fill
-
-
-def gesture_classification_text_color(theme_name, classification):
-    """Use a readable shade of the bar's color for small classification text."""
-    palette = PALETTES[resolve_theme(theme_name).name].deviation
-    return palette.color(classification).text
-
-
-def gesture_bar_background(theme_name):
-    """Return the theme's subdued track color for deviation bars."""
-    return PALETTES[resolve_theme(theme_name).name].track
-
-
 @dataclass(frozen=True)
 class DeviationPalette:
-    """Colors shared by live bars, editable bands, handles, and legends."""
+    """Colors shared by live bars, editable bands, handles, and legends.
+
+    The theme's classification colors are resolved once, when the palette is
+    created, rather than on every bar and label update.
+    """
 
     theme_name: str
     surface: str
     track: str
     foreground: str
+    classes: ClassificationPalette
 
     def classification(self, category):
-        return gesture_classification_color(self.theme_name, category)
+        """The bar color for a finger classification."""
+        return self.classes.color(category).fill
 
     def classification_text(self, category):
-        return gesture_classification_text_color(self.theme_name, category)
+        """A readable shade of the bar's color for small classification text."""
+        return self.classes.color(category).text
 
 
 class DeviationTheme:
@@ -174,9 +176,7 @@ class DeviationTheme:
         palette = PALETTES[theme_name]
         surface = style.lookup("TFrame", "background") or palette.surface
         foreground = style.lookup("TLabel", "foreground") or palette.foreground
-        return DeviationPalette(
-            theme_name, surface, gesture_bar_background(theme_name), foreground,
-        )
+        return DeviationPalette(theme_name, surface, palette.track, foreground, palette.deviation)
 
 
 def apply_theme(root, name, scale=1.0):
@@ -206,10 +206,7 @@ def apply_theme(root, name, scale=1.0):
         except tk.TclError:
             pass  # that font name doesn't exist in this sv-ttk version
 
-    padding = (
-        int(BASE_BUTTON_PADDING[0] * scale),
-        int(BASE_BUTTON_PADDING[1] * scale),
-    )
+    padding = tuple(scale_pixels(value, scale) for value in BASE_BUTTON_PADDING)
     style = ttk.Style(root)
     combo_font = style.lookup("TLabel", "font") or "TkDefaultFont"
     style.configure("TCombobox", font=combo_font)

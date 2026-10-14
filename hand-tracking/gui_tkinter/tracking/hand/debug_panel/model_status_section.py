@@ -4,7 +4,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from gui_tkinter.components.status_message import StatusMessage
-from landmarker import HandLandmarkerAsset, ModelStatus
+from landmarker import HandLandmarkerAsset, ModelCondition, ModelStatus
 
 
 class ModelStatusSection(ttk.LabelFrame):
@@ -27,16 +27,16 @@ class ModelStatusSection(ttk.LabelFrame):
     def set_status(self, status):
         self._status = status
         self.name.set(status.name)
-        if status.phase == "loading":
+        condition = status.condition
+        if condition == ModelCondition.LOADING:
             message = "Loading selected model… Hand detection will resume when it is ready."
-        elif status.phase == "failed":
+        elif condition == ModelCondition.FAILED:
             message = (
                 "Selected model could not load. " + ("Keeping the current model. " if status.available else "")
                 + "Go to Settings → Landmarker Model to choose a compatible bundle."
             )
-        elif not status.available:
+        elif condition == ModelCondition.MISSING:
             message = "No model is in use. Go to Settings → Landmarker Model to select one."
         else:
             message = f"{HandLandmarkerAsset.family} · Ready"
-        warning = self._status.phase == "failed" or not self._status.available
-        self.message.set(message, warning=warning)
+        self.message.set(message, warning=status.needs_attention)

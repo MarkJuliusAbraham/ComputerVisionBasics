@@ -2,6 +2,8 @@ import threading
 
 import cv2
 
+from camera_status import CameraPhase, CameraStatus
+
 
 class Camera:
     """Capture frames on one owner thread and publish the latest frame."""
@@ -15,7 +17,7 @@ class Camera:
         self._requested_index = int(camera_index)
         self._request_generation = 0
         self._frame = None
-        self._status = ("opening", int(camera_index), None)
+        self._status = CameraStatus(CameraPhase.OPENING, int(camera_index), None)
         self._lock = threading.Lock()
         self._wake = threading.Event()
         self._stopping = threading.Event()
@@ -24,7 +26,7 @@ class Camera:
 
     @property
     def switching(self):
-        return self.status()[0] in ("opening", "switching")
+        return self.status().is_switching
 
     @property
     def requested_index(self):
@@ -45,11 +47,11 @@ class Camera:
             self._requested_index = camera_index
             self._request_generation += 1
             self._frame = None
-            state = "switching" if self.index is not None else "opening"
-            self._status = (state, camera_index, self.index)
+            phase = CameraPhase.SWITCHING if self.index is not None else CameraPhase.OPENING
+            self._status = CameraStatus(phase, camera_index, self.index)
         self._wake.set()
 
-    def status(self):
+    def status(self) -> CameraStatus:
         with self._lock:
             return self._status
 
@@ -65,10 +67,17 @@ class Camera:
         capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
         capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
-    def _publish_status(self, state, requested, active, message=None):
+    def _set_status_locked(self, status: CameraStatus) -> None:
+        """Publish a worker status; the caller holds ``self._lock``."""
+        self._status = status
+        self.index = status.active_index
+
+    def _publish_failure(self, requested, message, attempted_generation):
+        """Clear the frame and report whether a newer request is already waiting."""
         with self._lock:
-            self._status = (state, requested, active, message)
-            self.index = active
+            self._set_status_locked(CameraStatus(CameraPhase.FAILED, requested, None, message))
+            self._frame = None
+            return self._request_generation != attempted_generation
 
     def _open(self, index):
         capture = cv2.VideoCapture(index)
@@ -116,14 +125,9 @@ class Camera:
                             error = f"Could not open camera {requested} or restore camera {active_index}: {restore_error}"
                     if capture is None:
                         message = error or f"Could not open camera {requested}"
-                        self._publish_status("failed", requested, None, message)
                         active_index = None
-                        with self._lock:
-                            changed = self._request_generation != attempted_generation
-                            self._frame = None
-                        if changed:
-                            continue
-                        self._wake.wait()
+                        if not self._publish_failure(requested, message, attempted_generation):
+                            self._wake.wait()
                         continue
                     if error is None:
                         active_index = requested
@@ -140,11 +144,7 @@ class Camera:
                     capture.release()
                     capture = None
                     active_index = None
-                    self._publish_status("failed", attempted_index, None, failure_message)
-                    with self._lock:
-                        self._frame = None
-                        changed = self._request_generation != attempted_generation
-                    if not changed:
+                    if not self._publish_failure(attempted_index, failure_message, attempted_generation):
                         self._wake.wait()
                     continue
                 with self._lock:
@@ -152,10 +152,9 @@ class Camera:
                     has_pending_switch = self._request_generation != attempted_generation
                     if not has_pending_switch:
                         self._frame = frame
-                        self._status = ("ready", attempted_index, active_index, ready_message)
-                        self.index = active_index
-                if has_pending_switch:
-                    continue
+                        self._set_status_locked(CameraStatus(
+                            CameraPhase.READY, attempted_index, active_index, ready_message,
+                        ))
         finally:
             if capture is not None:
                 capture.release()

@@ -13,9 +13,9 @@ class ProfilePickerView(ttk.Frame):
 
     def __init__(self, master, on_browse, on_create, on_confirm, on_cancel):
         appearance = ThemeMetrics(master)
-        scale = appearance.scale
-        gap = round(12 * scale)
-        padding = round(20 * scale)
+        pixels = appearance.pixels
+        gap = pixels(12)
+        padding = pixels(20)
         super().__init__(master, padding=padding)
         self.appearance = appearance
         self.columnconfigure(0, weight=1)
@@ -30,7 +30,7 @@ class ProfilePickerView(ttk.Frame):
         )
         ttk.Label(
             self, text="Select a profile, then confirm to activate it."
-        ).grid(row=1, column=0, sticky="w", pady=(round(4 * scale), gap))
+        ).grid(row=1, column=0, sticky="w", pady=(pixels(4), gap))
 
         folder = ttk.Frame(self)
         folder.grid(row=2, column=0, sticky="ew", pady=(0, gap))
@@ -79,7 +79,7 @@ class ProfilePickerView(ttk.Frame):
         self.selection_name = tk.StringVar(self, value="No profile selected")
         ttk.Label(selection, textvariable=self.selection_name,
                   font=self.strong_font, width=1, anchor="w").grid(
-            row=1, column=0, sticky="ew", pady=(round(3 * scale), 0)
+            row=1, column=0, sticky="ew", pady=(pixels(3), 0)
         )
         ttk.Button(footer, text="Cancel", command=on_cancel, width=11).grid(
             row=0, column=1, padx=(0, gap)

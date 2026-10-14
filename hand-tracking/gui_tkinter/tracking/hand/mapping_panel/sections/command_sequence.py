@@ -5,7 +5,7 @@ from tkinter import ttk
 
 from gui_tkinter.components.theme import ThemeMetrics
 from gui_tkinter.core.change_notifications import ChangeNotifications
-from gui_tkinter.core.idle_refresh import IdleRefresh
+from gui_tkinter.core.scaled_layout import ScaledLayout
 
 
 class CommandSequenceSection(ttk.LabelFrame):
@@ -18,26 +18,20 @@ class CommandSequenceSection(ttk.LabelFrame):
         self.commands = tk.StringVar(self)
         self.delay = tk.StringVar(self)
 
+        self.layout = ScaledLayout(self, self.appearance)
+        self.layout.configure(self, padding=16)
         ttk.Label(self, text="Keys", anchor="w").pack(anchor="w")
-        ttk.Entry(self, textvariable=self.commands).pack(
-            fill="x", pady=(self.appearance.pixels(6), 0),
-        )
+        self.layout.pack(ttk.Entry(self, textvariable=self.commands), fill="x", pady=(6, 0))
         ttk.Label(self, text="Enter one key per step, separated by commas.").pack(
             anchor="w", pady=(6, 12)
         )
         row = ttk.Frame(self)
         row.pack(fill="x")
         ttk.Label(row, text="Delay between steps (ms)", anchor="w").pack(side="left")
-        ttk.Spinbox(
+        self.layout.pack(ttk.Spinbox(
             row, textvariable=self.delay, from_=0, to=10000, increment=50, width=10,
-        ).pack(side="right", padx=(self.appearance.pixels(12), 0))
+        ), side="right", padx=(12, 0))
         self.changes.watch(self.commands, self.delay)
-        self._refresh_layout()
-        self.theme_refresh = IdleRefresh(self, self._refresh_layout, event="<<ThemeChanged>>")
-
-    def _refresh_layout(self):
-        self.appearance.refresh()
-        self.configure(padding=self.appearance.pixels(16))
 
     def load(self, commands, delay):
         with self.changes.suspended():

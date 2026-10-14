@@ -1,13 +1,16 @@
 ﻿import math
 
-from camera import Camera  # adjust to your actual module path
 
+def vector(a, b, aspect=1.0):
+    """Landmark difference with x/z scaled by the frame's width/height ratio.
 
-def vector(a, b):
+    MediaPipe normalizes x by width and y by height; the aspect ratio makes
+    the axes comparable. Callers pass the ratio of the frame being analyzed.
+    """
     return (
-        (b.x - a.x) * Camera.aspect,
+        (b.x - a.x) * aspect,
         (b.y - a.y),
-        (b.z - a.z) * Camera.aspect,
+        (b.z - a.z) * aspect,
     )
 
 
@@ -29,9 +32,9 @@ def distance(a, b, *, include_z=True) -> float:
     )
 
 
-def angle(a, b, c) -> float:
-    ba = vector(b, a)
-    bc = vector(b, c)
+def angle(a, b, c, aspect=1.0) -> float:
+    ba = vector(b, a, aspect)
+    bc = vector(b, c, aspect)
 
     magnitude_ba = math.dist((0, 0, 0), ba)
     magnitude_bc = math.dist((0, 0, 0), bc)

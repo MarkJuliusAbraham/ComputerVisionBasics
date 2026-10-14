@@ -14,22 +14,22 @@ class ProfileTable(ttk.Frame):
     def __init__(self, master, appearance, on_select):
         super().__init__(master)
         self._on_select = on_select
-        body_font, heading_font, scale = appearance.font, appearance.heading_font, appearance.scale
+        body_font, heading_font, pixels = appearance.font, appearance.heading_font, appearance.pixels
         self._profiles_by_id = {}
         self._header_padding = None
         self.columnconfigure(0, weight=1)
         self.rowconfigure(2, weight=1)
         status_width = max(
-            int(90 * scale), heading_font.measure("Status") + int(24 * scale)
+            pixels(90), heading_font.measure("Status") + pixels(24)
         )
 
         header = self.header = ttk.Frame(self)
-        header.grid(row=0, column=0, sticky="ew", pady=(0, int(7 * scale)))
+        header.grid(row=0, column=0, sticky="ew", pady=(0, pixels(7)))
         header.columnconfigure(0, weight=1)
         header.columnconfigure(1, minsize=status_width)
         for column, text in enumerate(("Profile", "Status")):
             ttk.Label(header, text=text, font=heading_font).grid(
-                row=0, column=column, sticky="w", padx=(int(4 * scale), 0)
+                row=0, column=column, sticky="w", padx=(pixels(4), 0)
             )
         ttk.Separator(self, orient="horizontal").grid(
             row=1, column=0, sticky="ew"
@@ -37,15 +37,15 @@ class ProfileTable(ttk.Frame):
 
         ttk.Style(self).configure(
             "ProfilePicker.Treeview", font=body_font,
-            rowheight=max(body_font.metrics("linespace") + int(16 * scale),
-                          int(34 * scale)),
+            rowheight=max(body_font.metrics("linespace") + pixels(16),
+                          pixels(34)),
         )
         self.tree = ttk.Treeview(
             self, columns=("profile", "status"), show="", height=6,
             selectmode="browse", style="ProfilePicker.Treeview",
         )
-        self.tree.column("profile", width=int(400 * scale),
-                         minwidth=int(100 * scale), stretch=True, anchor="w")
+        self.tree.column("profile", width=pixels(400),
+                         minwidth=pixels(100), stretch=True, anchor="w")
         self.tree.column("status", width=status_width, minwidth=status_width,
                          stretch=False, anchor="w")
         self.tree.grid(row=2, column=0, sticky="nsew")

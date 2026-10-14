@@ -1,6 +1,5 @@
 """Profile editing and persistence without Tk widget dependencies."""
 
-from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
 
@@ -32,8 +31,7 @@ class MappingSession:
 
     @property
     def profile_folder(self):
-        source = Path(self.profile_manager.source_path)
-        return source.parent if source.suffix.lower() == ".json" else source
+        return GestureProfileManager.folder_for(self.profile_manager.source_path)
 
     @property
     def definitions(self):
@@ -60,7 +58,8 @@ class MappingSession:
             definition.id: GestureDraft.from_definition(definition)
             for definition in config.definitions
         }
-        self._baseline = deepcopy(self.drafts)
+        # Drafts are immutable; copying the mapping is enough to keep a baseline.
+        self._baseline = dict(self.drafts)
         self.reset_draft = config.reset_match
         self.repeat_defaults = MovementSettingsDraft.from_settings(config.repeat_settings)
         self._repeat_baseline = self.repeat_defaults
@@ -71,7 +70,7 @@ class MappingSession:
         self.drafts[gesture_id] = draft
 
     def discard(self):
-        self.drafts = deepcopy(self._baseline)
+        self.drafts = dict(self._baseline)
         self.reset_draft = self.config.reset_match
         self.repeat_defaults = self._repeat_baseline
 
@@ -86,20 +85,19 @@ class MappingSession:
         self.reset_draft = match
 
     def build_config(self):
+        """The pending profile; ``GestureConfig.save`` validates it once on write."""
         definitions = tuple(
             self.drafts[definition.id].to_definition(definition)
             for definition in self.definitions
         )
-        updated = replace(
+        return replace(
             self.config, definitions=definitions, reset_match=self.reset_draft,
             repeat_settings=self.repeat_defaults.to_settings(),
         )
-        # Use the profile parser for criteria, conflicts, and command validation.
-        return GestureConfig.from_dict(updated.to_dict())
 
     def save(self):
-        config = self.build_config()
-        config.save(self.config_path)
+        # The profile parser checks criteria, conflicts, and commands.
+        config = self.build_config().save(self.config_path)
         self._load(config)
         return config
 
@@ -110,9 +108,7 @@ class MappingSession:
         return config
 
     def create_profile(self, folder, profile_name):
-        path = Path(folder) / f"{profile_name}.json"
-        if path.exists():
-            raise ValueError(f"A profile named {profile_name!r} already exists")
+        path = GestureProfileManager.ensure_new_profile_path(Path(folder) / f"{profile_name}.json")
         self.build_config().save(path)
         return path
 
@@ -132,11 +128,11 @@ class MappingSession:
                 raise ValueError("Gesture names cannot be empty")
             definitions.append(replace(saved.get(staged.id, staged), name=name))
 
-        updated = replace(self.config, definitions=tuple(definitions))
         # Name edits and deletions must also work while repairing a profile
         # with several conflicts. They do not commit the pending mapping draft.
-        updated = GestureConfig.from_dict(updated.to_dict(), allow_conflicts=True)
-        updated.save(self.config_path, allow_conflicts=True)
+        updated = replace(self.config, definitions=tuple(definitions)).save(
+            self.config_path, allow_conflicts=True,
+        )
 
         new_drafts = {}
         new_baseline = {}
@@ -151,5 +147,5 @@ class MappingSession:
             new_baseline[definition.id] = self._baseline.get(definition.id, default)
         self.config = updated
         self.drafts = new_drafts
-        self._baseline = deepcopy(new_baseline)
+        self._baseline = new_baseline
         return updated

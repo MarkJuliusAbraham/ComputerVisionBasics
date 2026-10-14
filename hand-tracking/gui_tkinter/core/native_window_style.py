@@ -1,49 +1,21 @@
 """Windows styles for fixed native windows that are not managed by Tk."""
 
 import ctypes
-from ctypes import wintypes
-import sys
+
+from . import win32
 
 
 class FixedNativeWindowStyle:
-    GWL_STYLE = -16
     WS_MAXIMIZEBOX = 0x00010000
     WS_THICKFRAME = 0x00040000
-    SWP_NOSIZE = 0x0001
-    SWP_NOMOVE = 0x0002
-    SWP_NOZORDER = 0x0004
-    SWP_NOACTIVATE = 0x0010
-    SWP_FRAMECHANGED = 0x0020
 
     def __init__(self):
-        self._user32 = None
-        if sys.platform != "win32":
-            return
-        self._user32 = ctypes.WinDLL("user32", use_last_error=True)
-        self._kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        self._user32.FindWindowExW.argtypes = (
-            wintypes.HWND, wintypes.HWND, wintypes.LPCWSTR, wintypes.LPCWSTR,
-        )
-        self._user32.FindWindowExW.restype = wintypes.HWND
-        self._user32.GetWindowThreadProcessId.argtypes = (
-            wintypes.HWND, ctypes.POINTER(wintypes.DWORD),
-        )
-        self._user32.GetWindowThreadProcessId.restype = wintypes.DWORD
-        self._kernel32.GetCurrentThreadId.argtypes = ()
-        self._kernel32.GetCurrentThreadId.restype = wintypes.DWORD
-        self._get_style = getattr(self._user32, "GetWindowLongPtrW", self._user32.GetWindowLongW)
-        self._set_style = getattr(self._user32, "SetWindowLongPtrW", self._user32.SetWindowLongW)
-        self._get_style.argtypes = (wintypes.HWND, ctypes.c_int)
-        self._get_style.restype = ctypes.c_ssize_t
-        self._set_style.argtypes = (
-            wintypes.HWND, ctypes.c_int, ctypes.c_ssize_t,
-        )
-        self._set_style.restype = ctypes.c_ssize_t
-        self._user32.SetWindowPos.argtypes = (
-            wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int,
-            ctypes.c_int, ctypes.c_int, wintypes.UINT,
-        )
-        self._user32.SetWindowPos.restype = wintypes.BOOL
+        self._user32 = win32.user32()
+        self._kernel32 = None
+        if self._user32 is not None:
+            self._kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            self._kernel32.GetCurrentThreadId.argtypes = ()
+            self._kernel32.GetCurrentThreadId.restype = ctypes.c_ulong
 
     def apply(self, title):
         """Disable resizing/maximization without changing position or focus.
@@ -61,15 +33,11 @@ class FixedNativeWindowStyle:
                 raise RuntimeError(f"Could not find the native window: {title}")
             if self._user32.GetWindowThreadProcessId(handle, None) == owner:
                 break
-        style = self._get_style(handle, self.GWL_STYLE)
+        style = self._user32.get_window_long(handle, win32.GWL_STYLE)
         fixed_style = style & ~(self.WS_MAXIMIZEBOX | self.WS_THICKFRAME)
-        ctypes.set_last_error(0)
-        if not self._set_style(handle, self.GWL_STYLE, fixed_style):
-            if ctypes.get_last_error():
-                raise ctypes.WinError(ctypes.get_last_error())
+        win32.call_allowing_zero(self._user32.set_window_long, handle, win32.GWL_STYLE, fixed_style)
         flags = (
-            self.SWP_NOSIZE | self.SWP_NOMOVE | self.SWP_NOZORDER
-            | self.SWP_NOACTIVATE | self.SWP_FRAMECHANGED
+            win32.SWP_NOSIZE | win32.SWP_NOMOVE | win32.SWP_NOZORDER
+            | win32.SWP_NOACTIVATE | win32.SWP_FRAMECHANGED
         )
-        if not self._user32.SetWindowPos(handle, None, 0, 0, 0, 0, flags):
-            raise ctypes.WinError(ctypes.get_last_error())
+        win32.check(self._user32.SetWindowPos(handle, None, 0, 0, 0, 0, flags))

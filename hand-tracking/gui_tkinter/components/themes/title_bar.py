@@ -11,6 +11,9 @@ import sys
 import tkinter as tk
 from weakref import WeakKeyDictionary
 
+from gui_tkinter.core import win32
+from gui_tkinter.core.widget_tree import root_service, walk_widgets
+
 
 @dataclass(frozen=True)
 class TitleBarPalette:
@@ -21,7 +24,6 @@ class TitleBarPalette:
 
 
 class NativeTitleBarStyle:
-    GA_ROOT = 2
     USE_IMMERSIVE_DARK_MODE = 20
     BORDER_COLOR = 34
     CAPTION_COLOR = 35
@@ -32,10 +34,8 @@ class NativeTitleBarStyle:
         if sys.platform != "win32":
             return
         try:
-            self._user32 = ctypes.WinDLL("user32", use_last_error=True)
+            self._user32 = win32.user32()
             dwm = ctypes.WinDLL("dwmapi", use_last_error=True)
-            self._user32.GetAncestor.argtypes = (wintypes.HWND, wintypes.UINT)
-            self._user32.GetAncestor.restype = wintypes.HWND
             dwm.DwmSetWindowAttribute.argtypes = (
                 wintypes.HWND, wintypes.DWORD, ctypes.c_void_p, wintypes.DWORD,
             )
@@ -51,7 +51,7 @@ class NativeTitleBarStyle:
     def handle(self, window):
         # Tk's widget handle belongs to its client area. DWM needs the outer
         # window handle; pointer-sized signatures prevent truncation on x64.
-        return self._user32.GetAncestor(window.winfo_id(), self.GA_ROOT)
+        return self._user32.GetAncestor(window.winfo_id(), win32.GA_ROOT)
 
     def apply(self, window, handle, palette):
         attributes = (
@@ -89,11 +89,7 @@ class TitleBarTheme:
 
     @classmethod
     def for_root(cls, root, palette_provider):
-        provider = getattr(root, "_title_bar_theme", None)
-        if provider is None:
-            provider = cls(root, palette_provider)
-            root._title_bar_theme = provider
-        return provider
+        return root_service(root, "_title_bar_theme", lambda owner: cls(owner, palette_provider))
 
     def refresh(self):
         if self.backend.available and not self._refresh_pending:
@@ -104,14 +100,9 @@ class TitleBarTheme:
 
     def _refresh(self):
         self._refresh_pending = False
-        self._refresh_windows(self.root)
-
-    def _refresh_windows(self, parent):
-        if isinstance(parent, (tk.Tk, tk.Toplevel)):
-            self._apply(parent)
-        # Python-owned children exclude Tk's private combobox popup windows.
-        for child in tuple(parent.children.values()):
-            self._refresh_windows(child)
+        for widget in walk_widgets(self.root):
+            if isinstance(widget, (tk.Tk, tk.Toplevel)):
+                self._apply(widget)
 
     def _on_map(self, event):
         window = event.widget

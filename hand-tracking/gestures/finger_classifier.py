@@ -3,6 +3,7 @@ from bisect import bisect_right
 from dataclasses import dataclass
 
 from .geometry import angle
+from .hand_landmarks import FINGER_JOINTS, point
 
 
 @dataclass(frozen=True)
@@ -52,11 +53,9 @@ FINGER_CATEGORIES_BY_COUNT = {
     ),
 }
 FINGER_CATEGORIES = FINGER_CATEGORIES_BY_COUNT[4]
-FINGER_POSITIONS = {
-    category.value
-    for categories in FINGER_CATEGORIES_BY_COUNT.values()
-    for category in categories
-}
+# Every category in display order; the largest segment count contains them all.
+ALL_FINGER_CATEGORIES = FINGER_CATEGORIES_BY_COUNT[max(FINGER_CATEGORIES_BY_COUNT)]
+FINGER_POSITIONS = frozenset(category.value for category in ALL_FINGER_CATEGORIES)
 
 
 def finger_categories(segment_count=4):
@@ -70,18 +69,10 @@ class FingerState:
     tip: tuple[float, float, float]
 
 
-FINGERS = {
-    "thumb": (1, 2, 3, 4),
-    "index": (5, 6, 7, 8),
-    "middle": (9, 10, 11, 12),
-    "ring": (13, 14, 15, 16),
-    "pinky": (17, 18, 19, 20),
-}
-
-
 class FingerClassifier:
     CALCULATION_DEFAULT = "default"
     CALCULATION_PROTOTYPE = "prototype"
+    CALCULATIONS = (CALCULATION_DEFAULT, CALCULATION_PROTOTYPE)
 
     def __init__(
         self, thresholds, calculation=CALCULATION_DEFAULT, segment_count=4
@@ -102,25 +93,27 @@ class FingerClassifier:
         index = 1 + bisect_right(thresholds[1:], deviation)
         return categories[min(index, len(categories) - 1)]
 
-    def classify(self, hand, indices) -> FingerState:
-        _mcp, _pip, _dip, tip = (hand[i] for i in indices)
-        deviation = self.deviation(hand, indices)
+    def classify(self, hand, indices, aspect=1.0) -> FingerState:
+        deviation = self.deviation(hand, indices, aspect)
         position = self.classify_deviation(
             deviation, self.thresholds, self.categories
         )
         return FingerState(
             deviation=deviation,
             position=position,
-            tip=(tip.x, tip.y, tip.z),
+            tip=point(hand[indices[-1]]),
         )
 
-    def classify_all(self, hand) -> dict[str, FingerState]:
-        return {name: self.classify(hand, indices) for name, indices in FINGERS.items()}
+    def classify_all(self, hand, aspect=1.0) -> dict[str, FingerState]:
+        return {
+            name: self.classify(hand, joints, aspect)
+            for name, joints in FINGER_JOINTS.items()
+        }
 
-    def deviation(self, hand, indices) -> float:
+    def deviation(self, hand, indices, aspect=1.0) -> float:
         mcp, pip, dip, tip = (hand[i] for i in indices)
-        pip_deviation = abs(180.0 - angle(mcp, pip, dip))
-        dip_deviation = abs(180.0 - angle(pip, dip, tip))
+        pip_deviation = abs(180.0 - angle(mcp, pip, dip, aspect))
+        dip_deviation = abs(180.0 - angle(pip, dip, tip, aspect))
 
         if self.calculation == self.CALCULATION_PROTOTYPE:
             # Experimental, intentionally aggressive: a strong bend at either

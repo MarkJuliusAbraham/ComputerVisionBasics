@@ -1,5 +1,7 @@
 """Scale native checkbox and radio indicators alongside theme typography."""
 
+from .scaling import scale_pixels
+
 
 class ChoiceControlTheme:
     BASE_INDICATOR_SIZE = 14
@@ -17,7 +19,7 @@ class ChoiceControlTheme:
 
     @staticmethod
     def _pixels(value, scale):
-        return max(1, round(value * scale))
+        return scale_pixels(value, scale, minimum=1)
 
     def settings(self, scale):
         p = self.palette

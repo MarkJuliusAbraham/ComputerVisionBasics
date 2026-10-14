@@ -2,6 +2,8 @@
 
 import tkinter as tk
 
+from camera_status import CameraStatus
+
 from gui_tkinter.core.state import ControlCallbacks
 from gui_tkinter.tracking.registry import TrackingWindowRegistry
 from settings.settings_manager import SettingsData
@@ -24,6 +26,6 @@ class MainPanel:
         self.widget.pack(fill="both", expand=True)
         return self.widget
 
-    def update_camera_state(self, state, requested, active, message=None):
+    def update_camera_state(self, status: CameraStatus) -> None:
         if self.widget is not None:
-            self.widget.camera.update_state(state, requested, active, message)
+            self.widget.camera.update_state(status)

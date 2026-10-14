@@ -76,6 +76,8 @@ class DistanceAdvance:
 
 
 class AverageDistanceAccumulator:
+    """``settings`` is a MovementBufferSettings: the starting buffer and its credit."""
+
     def __init__(self, origins, metric, settings):
         self.origins = dict(origins)
         self.metric = metric

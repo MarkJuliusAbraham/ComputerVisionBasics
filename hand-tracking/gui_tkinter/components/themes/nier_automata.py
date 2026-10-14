@@ -10,6 +10,8 @@ from tkinter import font as tkfont, ttk
 
 from .checkbox_indicator import SquareCheckboxIndicator
 from .choice_controls import ChoiceControlTheme
+from .scaling import scale_pixels
+from .typography import ThemeTypography
 
 
 class NierAutomataTheme:
@@ -102,7 +104,7 @@ class NierAutomataTheme:
         p = self.palette
         # Button styling is shared by ButtonTheme across all theme families.
         styles = {}
-        for name in ("TEntry", "TCombobox", "TSpinbox"):
+        for name in ThemeTypography.FIELD_CLASSES:
             styles[name] = {
                 "configure": {
                     "fieldbackground": p.field, "background": p.panel,
@@ -125,7 +127,7 @@ class NierAutomataTheme:
 
     def _navigation(self, scale):
         p = self.palette
-        padding = (round(16 * scale), round(8 * scale))
+        padding = (scale_pixels(16, scale), scale_pixels(8, scale))
         return {
             "TNotebook": {"configure": {
                 "background": p.surface, "bordercolor": p.border, "borderwidth": 1,

@@ -1,7 +1,7 @@
 """Keep exact finger selections independent of their editing mode and layout."""
 
 from ..criteria_options import (
-    CUSTOM_CLASSIFICATIONS, FINGER_NAMES, FINGER_OPTIONS, FingerCriteriaOptions,
+    CATEGORY_LABELS, CUSTOM_CLASSIFICATIONS, FINGER_NAMES, FINGER_OPTIONS, FingerCriteriaOptions,
 )
 
 
@@ -65,7 +65,7 @@ class FingerSelectionModel:
     def availability_message(self):
         inactive = self.inactive_positions
         names = ", ".join(
-            position.replace("_", " ") for position in FINGER_OPTIONS if position in inactive
+            CATEGORY_LABELS[position].lower() for position in FINGER_OPTIONS if position in inactive
         )
         detail = (
             f"Inactive: {names}. These cannot be detected at this segment count."

@@ -4,7 +4,7 @@ import tkinter as tk
 from tkinter import filedialog, ttk
 
 from gui_tkinter.components.status_message import StatusMessage
-from landmarker import HandLandmarkerAsset
+from landmarker import HandLandmarkerAsset, ModelCondition
 from gui_tkinter.core.change_notifications import ChangeNotifications
 
 
@@ -73,11 +73,12 @@ class LandmarkerModelSection(ttk.LabelFrame):
         self._runtime_status = status
         if self.path.get() != self._saved_path:
             return  # Preserve feedback about the user's uncommitted selection.
-        if status.phase == "loading":
+        condition = status.condition
+        if condition == ModelCondition.LOADING:
             self._set_message("Loading the selected model in the background…")
-        elif status.phase == "failed":
+        elif condition == ModelCondition.FAILED:
             self._set_message(f"Could not load model: {status.message[:180]}", invalid=True)
-        elif not status.available:
+        elif condition == ModelCondition.MISSING:
             self._set_message("No model loaded. Browse for a compatible .task bundle and click Apply.", invalid=True)
         else:
             self._set_message("Compatible MediaPipe Hand Landmarker model loaded.")

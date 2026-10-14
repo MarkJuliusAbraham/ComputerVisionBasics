@@ -7,6 +7,7 @@ from gestures.gesture_config import (
     GestureConfig,
     ensure_default_gesture_profile,
 )
+from json_storage import write_json_atomic
 
 
 PROFILE_SELECTION_PATH = (
@@ -26,24 +27,49 @@ class GestureProfileManager:
         self.active_profile = str(DEFAULT_GESTURE_CONFIG)
         self._load_selection()
 
+    # Profile validity by (path, modification time, size). Listing a folder
+    # parses only files that are new or changed since they were last checked.
+    _validity_cache: dict[tuple[Path, int, int], bool] = {}
+
     @staticmethod
-    def _folder_for(path):
+    def folder_for(path):
+        """A profile file's folder, or the path itself when it names a folder."""
         path = Path(path)
         return path.parent if path.suffix.lower() == ".json" else path
 
     @staticmethod
-    def list_profiles(path):
-        folder = GestureProfileManager._folder_for(path)
+    def ensure_new_profile_path(path):
+        path = Path(path)
+        if path.exists():
+            raise ValueError(f"A profile named {path.stem!r} already exists")
+        return path
+
+    @classmethod
+    def _is_valid_profile(cls, path):
+        try:
+            stat = path.stat()
+        except OSError:
+            return False
+        key = (path, stat.st_mtime_ns, stat.st_size)
+        valid = cls._validity_cache.get(key)
+        if valid is None:
+            try:
+                GestureConfig.load(path)
+                valid = True
+            except ValueError:
+                valid = False
+            cls._validity_cache[key] = valid
+        return valid
+
+    @classmethod
+    def list_profiles(cls, path):
+        folder = cls.folder_for(path)
         if not folder.is_dir():
             return ()
-        profiles = []
-        for item in sorted(folder.glob("*.json"), key=lambda file: file.name.lower()):
-            try:
-                GestureConfig.load(item)
-            except ValueError:
-                continue
-            profiles.append(item)
-        return tuple(profiles)
+        return tuple(
+            item for item in sorted(folder.glob("*.json"), key=lambda file: file.name.lower())
+            if cls._is_valid_profile(item)
+        )
 
     def _load_selection(self):
         try:
@@ -86,15 +112,10 @@ class GestureProfileManager:
         )
 
     def _save_selection(self):
-        self.selection_path.parent.mkdir(parents=True, exist_ok=True)
-        temporary = self.selection_path.with_name(self.selection_path.name + ".tmp")
-        with open(temporary, "w", encoding="utf-8") as file:
-            json.dump({
-                "source_path": self.source_path,
-                "active_profile": self.active_profile,
-            }, file, indent=2)
-            file.write("\n")
-        temporary.replace(self.selection_path)
+        write_json_atomic(self.selection_path, {
+            "source_path": self.source_path,
+            "active_profile": self.active_profile,
+        })
 
     def set_location(self, path):
         selected = Path(path)
@@ -126,9 +147,7 @@ class GestureProfileManager:
         self._save_selection()
 
     def add_profile(self, path):
-        profile = Path(path)
+        profile = self.ensure_new_profile_path(path)
         profile.parent.mkdir(parents=True, exist_ok=True)
-        if profile.exists():
-            raise ValueError(f"A profile named {profile.stem!r} already exists")
         self.active_profile = str(profile)
         self._save_selection()

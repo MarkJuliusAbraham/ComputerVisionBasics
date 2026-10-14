@@ -1,7 +1,8 @@
 """Optional execution behavior attached to a recognized command sequence."""
 
-import math
 from dataclasses import dataclass
+
+from config_values import is_finite_number, validate_whole_number
 
 
 @dataclass(frozen=True)
@@ -11,13 +12,9 @@ class CommandModifier:
     delay_variance_seconds: float = 0.0
 
     def __post_init__(self):
-        if not isinstance(self.repeat_count, int) or isinstance(self.repeat_count, bool) or self.repeat_count < 0:
-            raise ValueError("Command repeat count must be a non-negative whole number")
+        validate_whole_number(self.repeat_count, "Command repeat count must be a non-negative whole number")
         for value in (self.delay_seconds, self.delay_variance_seconds):
-            if (
-                not isinstance(value, (int, float)) or isinstance(value, bool)
-                or not math.isfinite(value) or value < 0
-            ):
+            if not is_finite_number(value) or value < 0:
                 raise ValueError("Command repeat delay and variance must be finite non-negative numbers")
 
     def next_delay_seconds(self, random_uniform):

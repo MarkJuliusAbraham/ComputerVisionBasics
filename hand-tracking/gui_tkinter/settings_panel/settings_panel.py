@@ -63,13 +63,17 @@ class SettingsPanel:
             return
         self.actions.set_dirty(self.is_dirty())
 
+    def _accept_form(self, data: SettingsData, status: str) -> None:
+        """Make the form's current text the clean baseline for ``data``."""
+        self.session.accept(data, self.form.draft_values())
+        self.form.status_var.set(status)
+        self._refresh_apply_state()
+
     def show_settings(self, settings: Settings) -> None:
         self.session.rebase(settings.data)
         if self.form is not None:
             self.form.load(settings)
-            self.session.accept(settings.data, self.form.draft_values())
-            self.form.status_var.set(f"{self.scope.name} settings loaded")
-            self._refresh_apply_state()
+            self._accept_form(settings.data, f"{self.scope.name} settings loaded")
 
     def rebase(self, settings: Settings, changed_fields: Iterable[str]) -> None:
         """Refresh applied values without destroying another panel's draft."""
@@ -97,19 +101,16 @@ class SettingsPanel:
             return False
         if result is False:
             return False
-        self.session.accept(
-            result if isinstance(result, SettingsData) else data, self.form.draft_values(),
+        self._accept_form(
+            result if isinstance(result, SettingsData) else data,
+            f"{self.scope.name} settings applied and saved",
         )
-        self._refresh_apply_state()
-        self.form.status_var.set(f"{self.scope.name} settings applied and saved")
         return True
 
     def discard(self) -> None:
         if self.form is not None:
             self.form.load_data(self.session.baseline)
-            self.session.accept(self.session.baseline, self.form.draft_values())
-            self.form.status_var.set("Unsaved settings discarded")
-            self._refresh_apply_state()
+            self._accept_form(self.session.baseline, "Unsaved settings discarded")
 
     def set_theme(self, theme_name: str) -> None:
         if self.form is not None:

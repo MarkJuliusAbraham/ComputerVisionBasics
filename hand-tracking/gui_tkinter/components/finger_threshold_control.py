@@ -2,6 +2,8 @@
 
 from tkinter import ttk
 
+from gestures.finger_thresholds import MAX_DEVIATION_DEGREES
+
 from .bars.threshold_ranges import ThresholdRanges
 from .bars.threshold_scale import ThresholdScaleView
 from .theme import DeviationTheme, ThemeMetrics
@@ -10,7 +12,7 @@ from .theme import DeviationTheme, ThemeMetrics
 class FingerThresholdControl(ttk.Frame):
     """Connect boundary editing to a reusable model and scale view."""
 
-    MAX_VALUE = 120
+    MAX_VALUE = MAX_DEVIATION_DEGREES
 
     def __init__(
         self, master, thresholds, segment_count=4, on_change=None,

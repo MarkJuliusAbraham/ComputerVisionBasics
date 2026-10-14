@@ -3,6 +3,10 @@
 import tkinter as tk
 from tkinter import ttk
 
+from gui_tkinter.core.widget_tree import root_service
+
+from .scaling import scale_pixels
+
 
 class SquareCheckboxIndicator:
     ELEMENT_NAME = "Checkbutton.indicator"
@@ -22,10 +26,7 @@ class SquareCheckboxIndicator:
     def for_theme(cls, root, theme_name):
         # ttk stores image names, not Python references. Keep their owners on
         # the interpreter root so indicators survive theme switches and GC.
-        providers = getattr(root, "_square_checkbox_indicators", None)
-        if providers is None:
-            providers = {}
-            root._square_checkbox_indicators = providers
+        providers = root_service(root, "_square_checkbox_indicators", lambda _root: {})
         if theme_name not in providers:
             providers[theme_name] = cls(root, theme_name)
         return providers[theme_name]
@@ -80,7 +81,7 @@ class SquareCheckboxIndicator:
         upper = palette.border if disabled else palette.button_edges.shadow
         lower = palette.border if disabled else palette.button_edges.highlight
         ink = palette.disabled if disabled else palette.foreground
-        stroke = max(1, round(self.BASE_BORDER_WIDTH * scale))
+        stroke = scale_pixels(self.BASE_BORDER_WIDTH, scale, minimum=1)
         right, bottom = left + size, top + size
         image.blank()
         image.put(face, to=(left, top, right, bottom))
@@ -88,10 +89,10 @@ class SquareCheckboxIndicator:
         image.put(upper, to=(left, top, left + stroke, bottom))
         image.put(lower, to=(left, bottom - stroke, right, bottom))
         image.put(lower, to=(right - stroke, top, right, bottom))
-        inset = max(stroke + 1, round(self.BASE_MARKER_INSET * scale))
+        inset = scale_pixels(self.BASE_MARKER_INSET, scale, minimum=stroke + 1)
         if marker == "on":
             image.put(ink, to=(left + inset, top + inset, right - inset, bottom - inset))
         elif marker == "mixed":
-            height = max(1, round(self.BASE_MIXED_HEIGHT * scale))
+            height = scale_pixels(self.BASE_MIXED_HEIGHT, scale, minimum=1)
             y = top + (size - height) // 2
             image.put(ink, to=(left + inset, y, right - inset, y + height))

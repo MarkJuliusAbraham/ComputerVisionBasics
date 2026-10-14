@@ -2,6 +2,8 @@
 
 from tkinter import ttk
 
+from gui_tkinter.core.widget_tree import root_service
+
 from ..theme import ThemeColors
 
 
@@ -16,12 +18,7 @@ class DestructiveButtonStyle:
     @classmethod
     def for_widget(cls, widget):
         """Share one style provider across windows in the same Tk interpreter."""
-        root = widget._root()
-        provider = getattr(root, "_destructive_button_style", None)
-        if provider is None:
-            provider = cls(root)
-            root._destructive_button_style = provider
-        return provider
+        return root_service(widget, "_destructive_button_style", cls)
 
     def apply(self):
         style = ttk.Style(self.root)

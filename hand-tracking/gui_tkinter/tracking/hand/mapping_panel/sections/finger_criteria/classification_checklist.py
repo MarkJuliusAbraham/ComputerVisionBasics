@@ -4,8 +4,13 @@ import tkinter as tk
 from tkinter import ttk
 from gui_tkinter.core.change_notifications import ChangeNotifications
 
-from ..criteria_options import FINGER_NAMES, FINGER_OPTIONS
+from ..criteria_options import CATEGORY_LABELS, FINGER_NAMES, FINGER_OPTIONS
 from .table import FingerCriteriaTable
+
+
+def _heading_text(position):
+    """The category label in title case, one word per line."""
+    return "\n".join(CATEGORY_LABELS[position].title().split())
 
 
 class ClassificationChecklist(FingerCriteriaTable):
@@ -19,7 +24,7 @@ class ClassificationChecklist(FingerCriteriaTable):
         self.variables = {name: {} for name in FINGER_NAMES}
         self.checkboxes = {name: {} for name in FINGER_NAMES}
         self.headings = {
-            position: self.heading(position.replace("_", "\n").title(), column, center=True)
+            position: self.heading(_heading_text(position), column, center=True)
             for column, position in enumerate(FINGER_OPTIONS, start=1)
         }
         for index, name in enumerate(FINGER_NAMES):
@@ -67,7 +72,7 @@ class ClassificationChecklist(FingerCriteriaTable):
             active = position in model.options.positions
             heading = self.headings[position]
             heading.configure(
-                text=position.replace("_", "\n").title() + ("" if active else "\n(inactive)"),
+                text=_heading_text(position) + ("" if active else "\n(inactive)"),
             )
             heading.state(["!disabled"] if active else ["disabled"])
             heading.grid(row=0, column=column, sticky="ew")

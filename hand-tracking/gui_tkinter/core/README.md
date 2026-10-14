@@ -24,6 +24,13 @@ declared in `callbacks.py`, with scoped values declared by the settings manager.
   Persistent tracking windows use `TrackingWindow` instead.
 - `UnsavedChangesGuard` accepts a `PendingChanges` object. Notebook navigation,
   profile changes, and gesture management share its Save/Discard/Return rules.
+- `ScaledLayout` records a widget's `pack`/`grid`/`configure` spacing once, in
+  100%-scale pixels, and re-applies it after theme or UI-scale changes. Use it
+  instead of writing the same padding again in a refresh method.
+- `widget_tree.walk_widgets` visits Python-owned widgets; `root_service` keeps
+  one style or binding provider per Tk interpreter.
+- `win32` loads `user32` once with typed signatures and shared error checks for
+  the overlay, title-bar, and fixed-window styling code.
 
 ## Reusable controls
 
@@ -44,8 +51,27 @@ the theme provider.
   `GestureManagerView` only renders the collection and forwards interactions.
 - Gesture pattern creation belongs to `gestures/GestureFactory`, which can be
   injected into gesture management.
-- `LiveHandData` is the single report used for debugging status and settings
-  previews, so those consumers derive their messages from the same data.
+- `LiveHandData` is the single report used for debugging status, settings
+  previews, and the desktop overlay. `HandSummaryData` formats gesture and
+  command text for both the widget view and the raster overlay.
+- `ClickThroughOverlayWindow` owns transparent window creation and placement;
+  `WindowsOverlayStyle` owns native input/focus behavior. `HandTrackingOverlay`
+  owns its display lifecycle. The hand module combines debugger visibility
+  and overlay activity before notifying the application; manual pause and
+  tracking/model settings still take precedence.
+- `HandOverlayRenderer` paints grayscale-antialiased text and themed bars into
+  an RGBA image. Only background surfaces receive the opacity setting.
+  Light-theme text has an opaque, theme-colored outline to retain contrast
+  when the backdrop fades. The outline and glyph masks share the raster cache.
+  `WindowsLayeredPresenter` packs premultiplied pixels for `UpdateLayeredWindow`
+  and reuses its native bitmap/DC. No color key or whole-window alpha is used;
+  dragging changes native placement without repainting the data.
+- `OverlaySettings` groups style, background opacity, and desktop position in
+  the application settings file. `OverlayOptionsDialog` previews its own draft
+  and reuses commit/discard actions and the unsaved-changes guard. Repositioning
+  temporarily allows drag input; finishing restores click-through behavior.
+  Pretty and Simple share the same renderer, summary formatter, and deviation
+  table formatting; the compact presentation removes card borders and spacing.
 
 Settings Apply, mapping Save, and gesture-management Save remain separate
 commit operations. Reusable widgets do not read or write configuration files.

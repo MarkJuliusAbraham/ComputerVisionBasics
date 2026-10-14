@@ -1,5 +1,8 @@
 """Keep editable fields aligned with the active theme's typography."""
 
+from gui_tkinter.core.widget_tree import walk_widgets
+
+
 class ThemeTypography:
     FIELD_CLASSES = ("TEntry", "TCombobox", "TSpinbox")
 
@@ -10,12 +13,6 @@ class ThemeTypography:
     def apply(self):
         for widget_class in self.FIELD_CLASSES:
             self.root.option_add(f"*{widget_class}.font", self.font_name)
-        self._update_fields(self.root)
-
-    def _update_fields(self, parent):
-        # Python-owned children exclude Tk's internal popup widgets, which
-        # winfo_children() cannot always resolve back to Python instances.
-        for widget in tuple(parent.children.values()):
+        for widget in walk_widgets(self.root, include_parent=False):
             if widget.winfo_class() in self.FIELD_CLASSES:
                 widget.configure(font=self.font_name)
-            self._update_fields(widget)

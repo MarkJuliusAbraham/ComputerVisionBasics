@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from ..finger_classifier import FINGERS
+from ..hand_landmarks import FINGER_NAMES
 
 
 @dataclass(frozen=True)
@@ -12,13 +12,13 @@ class GestureTrackingSettings:
     def __post_init__(self):
         if (
             not isinstance(self.fingers, tuple)
-            or any(not isinstance(name, str) or name not in FINGERS for name in self.fingers)
+            or any(not isinstance(name, str) or name not in FINGER_NAMES for name in self.fingers)
         ):
             raise ValueError("Tracked fingers must contain only valid finger names.")
         if len(set(self.fingers)) != len(self.fingers):
             raise ValueError("Tracked fingers cannot contain duplicates.")
         # Canonical ordering prevents checkbox order from creating false changes.
-        object.__setattr__(self, "fingers", tuple(name for name in FINGERS if name in self.fingers))
+        object.__setattr__(self, "fingers", tuple(name for name in FINGER_NAMES if name in self.fingers))
 
     def to_dict(self):
         return {"fingers": list(self.fingers)}

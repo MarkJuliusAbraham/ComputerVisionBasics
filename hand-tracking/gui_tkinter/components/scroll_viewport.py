@@ -1,21 +1,21 @@
 """Keep canvas scrolling confined to the actual overflow of its content."""
 
+from gui_tkinter.core.widget_tree import root_service
+
+WHEEL_EVENTS = ("<MouseWheel>", "<Button-4>", "<Button-5>")
+
 
 class ScrollWheelRouter:
     """One root-owned wheel binding that also survives closing child dialogs."""
 
     def __init__(self, root, resolve_container):
         self.resolve_container = resolve_container
-        for event in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+        for event in WHEEL_EVENTS:
             root.bind_all(event, self._on_wheel, add="+")
 
     @classmethod
     def install(cls, root, resolve_container):
-        router = getattr(root, "_scroll_wheel_router", None)
-        if router is None:
-            router = cls(root, resolve_container)
-            root._scroll_wheel_router = router
-        return router
+        return root_service(root, "_scroll_wheel_router", lambda owner: cls(owner, resolve_container))
 
     def _on_wheel(self, event):
         container = self.resolve_container(event)

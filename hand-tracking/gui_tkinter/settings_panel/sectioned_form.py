@@ -15,11 +15,14 @@ class SectionedSettingsForm(ttk.Frame):
         self.variables = {}
         self.status_var = tk.StringVar(self)
         self.validation_error = tk.StringVar(self)
+        # A ScaledLayout, when set, scales the padding in grid options.
+        self.layout = None
 
     def add_section(self, name, section, **grid_options):
         self.sections[name] = section
         if grid_options:
-            section.grid(sticky="new", **grid_options)
+            place = self.layout.grid if self.layout is not None else type(section).grid
+            place(section, sticky="new", **grid_options)
         else:
             section.pack(fill="x", pady=(0, 16))
         self.variables.update(getattr(section, "variables", {}))

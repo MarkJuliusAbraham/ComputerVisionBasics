@@ -3,7 +3,7 @@
 from contextlib import contextmanager
 import threading
 
-from .model_status import ModelStatus
+from .model_status import ModelPhase, ModelStatus
 
 
 class ModelLoader:
@@ -31,7 +31,7 @@ class ModelLoader:
             if self._stopping:
                 return
             self._generation += 1
-            self._status = ModelStatus("loading", path, self._status.active_path)
+            self._status = ModelStatus(ModelPhase.LOADING, path, self._status.active_path)
             self._wake.set()
 
     @contextmanager
@@ -63,10 +63,12 @@ class ModelLoader:
                         if candidate is not None or not path:
                             retired = self._active
                             self._active = candidate
-                            self._status = ModelStatus("ready" if candidate else "empty", path, path)
+                            self._status = ModelStatus(
+                                ModelPhase.READY if candidate else ModelPhase.EMPTY, path, path,
+                            )
                         else:
                             # Preserve a working model if the replacement fails to load.
-                            self._status = ModelStatus("failed", path, self._status.active_path, error)
+                            self._status = ModelStatus(ModelPhase.FAILED, path, self._status.active_path, error)
                 self._retire(candidate if stale else retired)
         finally:
             with self._lock:

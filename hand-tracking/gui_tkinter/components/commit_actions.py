@@ -2,7 +2,7 @@
 
 from tkinter import ttk
 
-from gui_tkinter.core.idle_refresh import IdleRefresh
+from gui_tkinter.core.scaled_layout import ScaledLayout
 
 from .buttons import DiscardChangesButton
 from .status_message import StatusMessage
@@ -20,18 +20,14 @@ class CommitActions(ttk.Frame):
             self, text=save_label, command=on_save, style="Accent.TButton",
         )
         self.save_button.pack(side="right")
-        self.discard_button = DiscardChangesButton(self, text=discard_label, command=on_discard)
-        self.discard_button.pack(side="right")
-        self.message = StatusMessage(self, appearance=self.appearance)
-        self.message.pack(side="left", fill="x", expand=True)
-        self.theme_refresh = IdleRefresh(self, self._refresh_layout, event="<<ThemeChanged>>")
-        self._refresh_layout()
+        self.layout = ScaledLayout(self, self.appearance)
+        self.discard_button = self.layout.pack(
+            DiscardChangesButton(self, text=discard_label, command=on_discard), side="right", padx=(0, 10),
+        )
+        self.message = self.layout.pack(
+            StatusMessage(self, appearance=self.appearance), side="left", fill="x", expand=True, padx=(0, 12),
+        )
         self.set_dirty(False)
-
-    def _refresh_layout(self):
-        self.appearance.refresh()
-        self.discard_button.pack_configure(padx=(0, self.appearance.pixels(10)))
-        self.message.pack_configure(padx=(0, self.appearance.pixels(12)))
 
     def set_dirty(self, dirty):
         state = ["!disabled"] if dirty else ["disabled"]

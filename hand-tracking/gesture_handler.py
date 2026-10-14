@@ -36,21 +36,27 @@ class GestureHandler:
 
     def _set_config(self, config):
         self.config = config
-        report = self.criteria_validator.validate(
-            {definition.id: definition.match for definition in config.definitions}, config.reset_match,
-        )
+        report = config.validation_report(self.criteria_validator)
         self._valid_definitions = tuple(
             definition for definition in config.definitions if definition.id not in report.invalid_ids
         )
 
-    def configure(self, config):
-        """Replace mappings and clear the active drawing and command instance."""
+    def _cancel_input(self, *, keep_drawing=False, keep_wrist_history=False):
+        """Stop queued commands and repeats and re-arm gesture input."""
         self.command_executor.clear()
         self.repeat_controller.clear()
-        self.path_tracker.clear()
-        self.wrist_history.clear()
-        self._set_config(config)
+        if keep_drawing:
+            self.path_tracker.finish()
+        else:
+            self.path_tracker.clear()
+        if not keep_wrist_history:
+            self.wrist_history.clear()
         self._input_locked = False
+
+    def configure(self, config):
+        """Replace mappings and clear the active drawing and command instance."""
+        self._cancel_input()
+        self._set_config(config)
 
     def configure_optimistic(self, settings):
         if settings != self.wrist_history.settings:
@@ -63,18 +69,11 @@ class GestureHandler:
             self.repeat_controller.update()
 
     def close(self):
-        self.command_executor.clear()
-        self.repeat_controller.clear()
-        self.path_tracker.clear()
-        self.wrist_history.clear()
+        self._cancel_input()
 
     def suspend(self):
         """Cancel input and repeats while preserving the completed drawing."""
-        self.command_executor.clear()
-        self.repeat_controller.clear()
-        self.path_tracker.finish()
-        self.wrist_history.clear()
-        self._input_locked = False
+        self._cancel_input(keep_drawing=True)
 
     @property
     def drawing_paths(self):
@@ -95,12 +94,9 @@ class GestureHandler:
         self.wrist_history.record(handedness, state.wrist)
         if self.matcher.matches(self.config.reset_match, state):
             if invoke_commands:
-                self.command_executor.clear()
-                self.repeat_controller.clear()
-                self.path_tracker.clear()
                 # Wrist history remains continuous across gesture resets.
                 # The lookback window decides which earlier motion qualifies.
-                self._input_locked = False
+                self._cancel_input(keep_wrist_history=True)
             return None
 
         try:

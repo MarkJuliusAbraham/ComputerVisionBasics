@@ -2,6 +2,7 @@
 
 from dataclasses import replace
 import tkinter as tk
+from gui_tkinter.core.callbacks import Action
 from gui_tkinter.core.state import ControlCallbacks
 from landmarker import ModelStatus
 from settings.settings_manager import SettingsData
@@ -11,12 +12,18 @@ from .live_hand_data import LiveHandData
 
 
 class HandDebugPanel:
-    def __init__(self, on_open_settings=None):
+    def __init__(
+        self, on_open_settings=None, on_toggle_overlay: Action | None = None,
+        on_overlay_options: Action | None = None,
+    ):
         self.widget: HandDebugTab | None = None
         self._paused = False
         self.data = LiveHandData()
         self._model_status = ModelStatus()
         self._on_open_settings = on_open_settings
+        self._on_toggle_overlay = on_toggle_overlay
+        self._on_overlay_options = on_overlay_options
+        self._overlay_enabled = False
 
     def build(
         self, parent: tk.Misc, *, callbacks: ControlCallbacks,
@@ -26,11 +33,14 @@ class HandDebugPanel:
             parent, on_restart=callbacks.on_restart, on_close=callbacks.on_close,
             on_toggle_tracking=callbacks.on_toggle_tracking,
             theme_name=settings.theme,
-            max_deviation=settings.finger_classification_thresholds[-1],
+            max_deviation=settings.max_finger_deviation,
             on_open_settings=self._on_open_settings,
+            on_toggle_overlay=self._on_toggle_overlay,
+            on_overlay_options=self._on_overlay_options,
         )
         self.widget.pack(fill="both", expand=True)
         self.set_tracking_paused(self._paused)
+        self.set_overlay_enabled(self._overlay_enabled)
         self.set_model_status(self._model_status)
         return self.widget
 
@@ -38,6 +48,11 @@ class HandDebugPanel:
         self._paused = paused
         if self.widget is not None:
             self.widget.set_tracking_paused(paused)
+
+    def set_overlay_enabled(self, enabled: bool) -> None:
+        self._overlay_enabled = enabled
+        if self.widget is not None:
+            self.widget.set_overlay_enabled(enabled)
 
     def set_model_status(self, status):
         self._model_status = status

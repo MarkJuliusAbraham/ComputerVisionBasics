@@ -1,12 +1,12 @@
 """Deviation boundary data and editing rules independent of Tkinter."""
 
-from gestures.finger_classifier import FINGER_CATEGORIES_BY_COUNT, finger_categories
+from gestures.finger_thresholds import MAX_DEVIATION_DEGREES, FingerThresholds, splits_are_valid
 
 
 class ThresholdRanges:
     """Own increasing split points without making the view handle validation."""
 
-    def __init__(self, thresholds, segment_count, maximum=120):
+    def __init__(self, thresholds, segment_count, maximum=MAX_DEVIATION_DEGREES):
         self.maximum = maximum
         self.set_ranges(thresholds, segment_count)
 
@@ -15,16 +15,11 @@ class ThresholdRanges:
         return list(self._thresholds)
 
     def set_ranges(self, thresholds, segment_count):
-        values = [float(value) for value in thresholds]
-        if (
-            segment_count not in FINGER_CATEGORIES_BY_COUNT
-            or len(values) != segment_count - 1
-            or any(not 0 <= value <= self.maximum for value in values)
-            or any(left >= right for left, right in zip(values, values[1:]))
-        ):
+        ranges = FingerThresholds(tuple(float(value) for value in thresholds), segment_count)
+        if not ranges.is_valid or not splits_are_valid(ranges.splits, self.maximum):
             raise ValueError("Deviation ranges need increasing split points for 4–6 segments")
-        self._thresholds = values
-        self.categories = finger_categories(segment_count)
+        self._thresholds = list(ranges.splits)
+        self.categories = ranges.categories
 
     def move(self, index, value):
         previous = self._thresholds[index - 1] if index else 0

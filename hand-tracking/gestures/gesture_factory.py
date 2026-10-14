@@ -3,8 +3,10 @@
 from itertools import product
 from uuid import uuid4
 
-from .finger_classifier import FINGERS, finger_categories
+from .finger_classifier import finger_categories
+from .hand_landmarks import FINGER_NAMES
 from .gesture_config import CommandSequence, CommandStep, GestureConfig, GestureDefinition, GestureMatch
+from .palm_detector import PalmPosition
 from .repeating.settings import RepeatSettings
 
 
@@ -14,12 +16,12 @@ class GestureFactory:
         current_definitions, segment_count=4, reset_match=None, *, repeat_settings=None,
     ):
         """Choose an unused pattern for a newly managed gesture."""
-        fingers = tuple(FINGERS)
+        fingers = FINGER_NAMES
         positions = tuple(category.value for category in finger_categories(segment_count))
         existing = [definition.match for definition in current_definitions]
         if reset_match is not None:
             existing.append(reset_match)
-        for palm in (None, "facing_camera", "not_facing_camera"):
+        for palm in (None, *(position.value for position in PalmPosition)):
             for pattern in product(positions, repeat=len(fingers)):
                 match = GestureMatch(
                     palm=palm,

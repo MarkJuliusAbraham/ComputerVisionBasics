@@ -7,40 +7,19 @@ from typing import Callable, TypeAlias
 from landmarker import DEFAULT_MODEL_PATH
 from gestures.optimistic.settings import OptimisticTrackingSettings
 
-from gestures.finger_classifier import (
-    FINGER_CATEGORIES_BY_COUNT,
-    FingerClassifier,
-    finger_categories,
+from gestures.finger_classifier import FINGER_CATEGORIES_BY_COUNT, FingerClassifier
+from gestures.finger_thresholds import (
+    DEFAULT_SPLITS,
+    FingerThresholds,
+    default_finger_thresholds,
+    resize_finger_thresholds,
+    splits_are_valid,
 )
+from json_storage import write_json_atomic
 
 from .theme_choices import THEMES, resolve_theme
+from .overlay_settings import OverlaySettings
 
-
-def default_finger_thresholds(segment_count=4):
-    """Keep the original four bands and subdivide the higher-bend ranges."""
-    return resize_finger_thresholds([15.0, 45.0, 75.0], segment_count)
-
-
-def resize_finger_thresholds(thresholds, segment_count):
-    """Resize a split list while retaining existing values where practical."""
-    if segment_count not in FINGER_CATEGORIES_BY_COUNT:
-        raise ValueError("Finger segment count must be between 4 and 6")
-    values = sorted(float(value) for value in thresholds)
-    if len(values) < 2:
-        values = [15.0, 45.0, 75.0]
-    target_count = segment_count - 1
-    while len(values) < target_count:
-        insert_before_closed = len(values) - 1
-        lower = values[insert_before_closed - 1]
-        upper = values[insert_before_closed]
-        values.insert(insert_before_closed, (lower + upper) / 2)
-    while len(values) > target_count:
-        if target_count == 0:
-            return []
-        # Added bands are inserted immediately before the Closed band, so
-        # remove those split points in reverse order when reducing the count.
-        values.pop(-2)
-    return values
 
 DEFAULT_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "settings.json"
@@ -59,9 +38,10 @@ class SettingsData:
     finger_classification_thresholds: list[float] = field(
         default_factory=lambda: default_finger_thresholds(4)
     )
-    finger_deviation_calculation: str = "default"
+    finger_deviation_calculation: str = FingerClassifier.CALCULATION_DEFAULT
     hand_landmarker_model_path: str = DEFAULT_MODEL_PATH
     optimistic_tracking: OptimisticTrackingSettings = field(default_factory=OptimisticTrackingSettings)
+    hand_overlay: OverlaySettings = field(default_factory=OverlaySettings)
 
     def to_dict(self):
         return asdict(self)
@@ -72,12 +52,18 @@ class SettingsData:
         data = {key: value for key, value in values.items() if key in fields}
         defaults = cls()
         try:
+            data["hand_overlay"] = OverlaySettings.from_dict(data.get("hand_overlay"))
+        except ValueError:
+            data["hand_overlay"] = defaults.hand_overlay
+        try:
             data["optimistic_tracking"] = OptimisticTrackingSettings.from_dict(data.get("optimistic_tracking"))
         except ValueError:
             data["optimistic_tracking"] = defaults.optimistic_tracking
         if not isinstance(data.get("hand_landmarker_model_path", defaults.hand_landmarker_model_path), str):
             data["hand_landmarker_model_path"] = defaults.hand_landmarker_model_path
         data["theme"] = resolve_theme(data.get("theme", defaults.theme)).name
+        if data.get("ui_scale", defaults.ui_scale) not in UI_SCALES:
+            data["ui_scale"] = defaults.ui_scale
         try:
             segment_count = int(data.get("finger_segment_count", 0))
         except (TypeError, ValueError, OverflowError):
@@ -100,9 +86,7 @@ class SettingsData:
             )
             if any(key in values for key in legacy_keys):
                 data["finger_classification_thresholds"] = [
-                    values.get("finger_straight_threshold", 15.0),
-                    values.get("finger_curled_threshold", 45.0),
-                    values.get("finger_closed_threshold", 75.0),
+                    values.get(key, default) for key, default in zip(legacy_keys, DEFAULT_SPLITS)
                 ]
             else:
                 data["finger_classification_thresholds"] = default_finger_thresholds(
@@ -112,9 +96,7 @@ class SettingsData:
             thresholds = [float(value) for value in data["finger_classification_thresholds"]]
         except (TypeError, ValueError):
             thresholds = default_finger_thresholds(segment_count)
-        if any(not 0.0 <= value <= 120.0 for value in thresholds) or any(
-            left >= right for left, right in zip(thresholds, thresholds[1:])
-        ):
+        if not splits_are_valid(thresholds):
             thresholds = default_finger_thresholds(segment_count)
         else:
             thresholds = resize_finger_thresholds(thresholds, segment_count)
@@ -122,32 +104,31 @@ class SettingsData:
         for key in ("track_hands", "profile"):
             if key in data and not isinstance(data[key], bool):
                 data[key] = getattr(defaults, key)
-        if data.get("finger_deviation_calculation") not in ("default", "prototype"):
+        if data.get("finger_deviation_calculation") not in FingerClassifier.CALCULATIONS:
             data["finger_deviation_calculation"] = defaults.finger_deviation_calculation
         return cls(**data)
 
-    def has_valid_finger_thresholds(self):
-        thresholds = self.finger_classification_thresholds
-        return (
-            self.finger_segment_count in FINGER_CATEGORIES_BY_COUNT
-            and len(thresholds) == self.finger_segment_count - 1
-            and all(0.0 <= value <= 120.0 for value in thresholds)
-            and all(left < right for left, right in zip(thresholds, thresholds[1:]))
+    @property
+    def finger_thresholds(self) -> FingerThresholds:
+        return FingerThresholds(
+            tuple(self.finger_classification_thresholds), self.finger_segment_count,
         )
+
+    @property
+    def max_finger_deviation(self) -> float:
+        return self.finger_thresholds.max_deviation
+
+    def has_valid_finger_thresholds(self):
+        return self.finger_thresholds.is_valid
 
     def classify_finger_deviation(self, deviation):
-        return FingerClassifier.classify_deviation(
-            deviation,
-            self.finger_classification_thresholds,
-            finger_categories(self.finger_segment_count),
-        )
+        return self.finger_thresholds.classify(deviation)
 
 
-DEFAULTS = SettingsData()
 CHOICES = {"theme": THEMES, "ui_scale": UI_SCALES}
 
 # Values submitted by a scoped settings form, before JSON serialization.
-SettingsValue: TypeAlias = bool | int | float | str | list[float] | OptimisticTrackingSettings
+SettingsValue: TypeAlias = bool | int | float | str | list[float] | OptimisticTrackingSettings | OverlaySettings
 SettingsValues: TypeAlias = dict[str, SettingsValue]
 
 
@@ -219,14 +200,8 @@ class Settings:
             print(f"Could not read {self.path} ({e}); using defaults")
             return
         if isinstance(loaded, dict):
+            # from_dict normalizes choices and thresholds to valid values.
             self.data = SettingsData.from_dict(loaded)
-        for key, allowed in CHOICES.items():
-            if getattr(self.data, key) not in allowed:
-                setattr(self.data, key, getattr(DEFAULTS, key))
-        if not self.data.has_valid_finger_thresholds():
-            self.data.finger_classification_thresholds = (
-                default_finger_thresholds(self.data.finger_segment_count)
-            )
 
     def get(self, key):
         return getattr(self.data, key, None)
@@ -247,6 +222,8 @@ class Settings:
             raise ValueError("Finger thresholds must be increasing")
         if not isinstance(updated.optimistic_tracking, OptimisticTrackingSettings):
             raise ValueError("Optimistic Tracking settings must be valid")
+        if not isinstance(updated.hand_overlay, OverlaySettings):
+            raise ValueError("Overlay settings must be valid")
         previous = self.data
         self.data = updated
         try:
@@ -261,10 +238,4 @@ class Settings:
         return self.data
 
     def save(self):
-        directory = os.path.dirname(self.path)
-        if directory:
-            os.makedirs(directory, exist_ok=True)
-        tmp = self.path + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(self.data.to_dict(), f, indent=2)
-        os.replace(tmp, self.path)
+        write_json_atomic(self.path, self.data.to_dict(), trailing_newline=False)

@@ -6,7 +6,7 @@ from tkinter import ttk
 from gui_tkinter.components.finger_threshold_control import FingerThresholdControl
 from gui_tkinter.components.theme import DeviationTheme, ThemeMetrics
 from gui_tkinter.core.change_notifications import ChangeNotifications
-from settings.settings_manager import default_finger_thresholds, resize_finger_thresholds
+from gestures.finger_thresholds import FingerThresholds, default_finger_thresholds, resize_finger_thresholds
 
 from .deviation_preview import DeviationPreview
 
@@ -62,9 +62,8 @@ class DeviationSettings(ttk.Frame):
         self.changes.emit()
 
     def _update_preview(self):
-        thresholds = self.control.thresholds
         self.preview.set_thresholds(
-            thresholds, self.segment_count.get(), thresholds[-1],
+            FingerThresholds(tuple(self.control.thresholds), self.segment_count.get()),
         )
 
     def values(self):

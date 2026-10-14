@@ -1,6 +1,7 @@
 ﻿from dataclasses import dataclass
 
 from .finger_classifier import FingerClassifier, FingerState, FingerPosition
+from .hand_landmarks import Landmark, point
 from .palm_detector import PalmDetector, PalmPosition
 from .tracking.path import Point
 
@@ -30,17 +31,10 @@ class Detector:
             settings.finger_segment_count,
         )
 
-    def update(self, hand, handedness: str) -> GestureState:
-        fingers = self._finger_classifier.classify_all(hand)
-
-        palm = self._palm_detector.detect(
-            hand,
-            handedness,
+    def update(self, hand, handedness: str, aspect: float = 1.0) -> GestureState:
+        """Classify one hand; ``aspect`` is the analyzed frame's width/height."""
+        return GestureState(
+            palm=self._palm_detector.detect(hand, handedness, aspect),
+            fingers=self._finger_classifier.classify_all(hand, aspect),
+            wrist=point(hand[Landmark.WRIST]),
         )
-
-        state = GestureState(
-            palm=palm,
-            fingers=fingers,
-            wrist=(hand[0].x, hand[0].y, hand[0].z),
-        )
-        return state

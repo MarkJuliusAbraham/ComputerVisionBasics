@@ -3,9 +3,14 @@
 import tkinter as tk
 from tkinter import ttk
 
+from camera_status import CameraPhase, CameraStatus
 from gui_tkinter.core.state import CameraState
 from gui_tkinter.core.change_notifications import ChangeNotifications
 from .status_message import StatusMessage
+
+
+def device_label(index):
+    return f"Camera {index}"
 
 
 class CameraSection(ttk.LabelFrame):
@@ -15,11 +20,11 @@ class CameraSection(ttk.LabelFrame):
         super().__init__(master, text="Camera", padding=(12, 10, 12, 10))
         self._on_switch = on_switch
         self.camera_state = CameraState(requested_index=camera_index)
-        self._devices = {f"Camera {index}": index for index in range(10)}
+        self._devices = {device_label(index): index for index in range(10)}
         self._ensure_device(camera_index)
         self.columnconfigure(1, weight=1)
 
-        self.selected_device = tk.StringVar(self, value=f"Camera {camera_index}")
+        self.selected_device = tk.StringVar(self, value=device_label(camera_index))
         self.active_device = tk.StringVar(self, value="None")
         self.connection = tk.StringVar(self, value="Connecting")
         self.message = tk.StringVar(self, value=f"Opening camera {camera_index}…")
@@ -58,7 +63,7 @@ class CameraSection(ttk.LabelFrame):
 
     def _ensure_device(self, index):
         if index is not None:
-            self._devices[f"Camera {index}"] = index
+            self._devices[device_label(index)] = index
 
     def _refresh_switch_state(self, *_args):
         selected = self._devices.get(self.selected_device.get())
@@ -87,29 +92,30 @@ class CameraSection(ttk.LabelFrame):
         self._refresh_switch_state()
         self._on_switch(index)
 
-    def update_state(self, state, requested, active, message=None):
+    def update_state(self, status: CameraStatus):
         """Display opening, successful, failed, and restored-camera results."""
+        requested, active, message = status.requested_index, status.active_index, status.message
         self._ensure_device(requested)
         self._ensure_device(active)
         self.device_picker.configure(values=tuple(self._devices))
-        if state in ("opening", "switching"):
+        if status.is_switching:
             self.camera_state.begin_switch(requested)
             self.camera_state.active_index = active
             self.camera_state.is_active = active is not None
-            self.selected_device.set(f"Camera {requested}")
-            self.connection.set("Switching" if state == "switching" else "Connecting")
+            self.selected_device.set(device_label(requested))
+            self.connection.set("Switching" if status.phase == CameraPhase.SWITCHING else "Connecting")
             self.message.set(message or f"Opening camera {requested}…")
-        elif state == "ready":
+        elif status.phase == CameraPhase.READY:
             self.camera_state.mark_ready(active)
             self.camera_state.requested_index = requested
-            self.selected_device.set(f"Camera {active}")
+            self.selected_device.set(device_label(active))
             self.connection.set("Ready")
             self.message.set(message or "Camera is streaming.")
-        elif state == "failed":
+        elif status.phase == CameraPhase.FAILED:
             self.camera_state.mark_failed(active)
             self.camera_state.requested_index = requested
-            self.selected_device.set(f"Camera {requested}")
+            self.selected_device.set(device_label(requested))
             self.connection.set("Unavailable")
             self.message.set(message or f"Could not open camera {requested}. Select a device and try again.")
-        self.active_device.set(f"Camera {active}" if active is not None else "None")
+        self.active_device.set(device_label(active) if active is not None else "None")
         self._refresh_switch_state()

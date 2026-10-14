@@ -2,6 +2,8 @@
 
 from tkinter import ttk
 
+from gestures.hand_landmarks import finger_label
+
 from ..criteria_options import FINGER_NAMES
 
 
@@ -20,7 +22,7 @@ class FingerCriteriaTable(ttk.Frame):
         self._dividers = [divider]
         for index, name in enumerate(FINGER_NAMES):
             row = self.finger_row(index)
-            ttk.Label(self, text=name.title(), anchor="w", width=1).grid(
+            ttk.Label(self, text=finger_label(name), anchor="w", width=1).grid(
                 row=row, column=0, sticky="ew",
             )
             if index + 1 < len(FINGER_NAMES):

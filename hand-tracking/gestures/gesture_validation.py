@@ -2,7 +2,8 @@
 
 from dataclasses import dataclass
 
-from .finger_classifier import FINGERS, FINGER_POSITIONS
+from .finger_classifier import FINGER_POSITIONS
+from .hand_landmarks import FINGER_NAMES
 
 
 @dataclass(frozen=True)
@@ -41,7 +42,7 @@ class GestureCriteriaValidator:
         # of the currently displayed segment count.
         return match.palm, tuple(
             frozenset(match.fingers.get(finger, FINGER_POSITIONS))
-            for finger in FINGERS
+            for finger in FINGER_NAMES
         )
 
     def validate(self, criteria, reset_match):

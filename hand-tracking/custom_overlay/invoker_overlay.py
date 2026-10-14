@@ -40,6 +40,12 @@ class InvokerOverlay:
             if image is not None:
                 self.images[file.stem] = image
 
+    def reset(self):
+        """Forget queued elements and hide any displayed spell."""
+        self.spell_stack.clear()
+        self.current_image = None
+        self.image_expiry = 0
+
     def addCommand(self, command):
 
         if command == 'q' or command == 'w' or command == 'e':

@@ -3,6 +3,8 @@
 import tkinter as tk
 from tkinter import ttk
 
+from gui_tkinter.core.widget_tree import root_service, walk_widgets
+
 
 class PopupTheme:
     def __init__(self, root):
@@ -21,11 +23,7 @@ class PopupTheme:
 
     @classmethod
     def for_root(cls, root):
-        provider = getattr(root, "_popup_theme", None)
-        if provider is None:
-            provider = cls(root)
-            root._popup_theme = provider
-        return provider
+        return root_service(root, "_popup_theme", cls)
 
     def apply(self, palette, font_name):
         self.palette = palette
@@ -40,7 +38,7 @@ class PopupTheme:
             self.root.option_add(f"*TCombobox*Listbox.{name}", value)
         for name, value in self._menu_options().items():
             self.root.option_add(f"*Menu.{name}", value)
-        self._update_existing(self.root)
+        self._update_existing()
 
     def _listbox_options(self):
         p = self.palette
@@ -61,13 +59,12 @@ class PopupTheme:
             "borderWidth": 1, "relief": "solid", "font": self.font_name,
         }
 
-    def _update_existing(self, parent):
-        for widget in tuple(parent.children.values()):
+    def _update_existing(self):
+        for widget in walk_widgets(self.root, include_parent=False):
             if isinstance(widget, ttk.Combobox):
                 self._style_listbox(f"{widget}.popdown.f.l")
             elif isinstance(widget, tk.Menu):
                 self._style_menu(str(widget))
-            self._update_existing(widget)
 
     def _style_listbox(self, path):
         self._configure(path, self._listbox_options())

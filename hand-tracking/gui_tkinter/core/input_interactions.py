@@ -4,6 +4,9 @@ import tkinter as tk
 from tkinter import ttk
 
 from gui_tkinter.components.scrollable_frame import ScrollableFrame
+from gui_tkinter.components.scroll_viewport import WHEEL_EVENTS
+
+from .widget_tree import walk_widgets
 
 
 class InputInteractionController:
@@ -14,7 +17,6 @@ class InputInteractionController:
         "tk", "toplevel", "frame", "tframe", "labelframe", "tlabelframe",
         "label", "tlabel", "separator", "tseparator", "canvas",
     }
-    WHEEL_EVENTS = ("<MouseWheel>", "<Button-4>", "<Button-5>")
 
     def __init__(self, root):
         self.root = root
@@ -26,17 +28,13 @@ class InputInteractionController:
             return
         self._bound = True
         self.root.bind_all("<Button-1>", self._background_clicked, add="+")
-        for event in self.WHEEL_EVENTS:
+        for event in WHEEL_EVENTS:
             self.root.bind_class(self._wheel_tag, event, self._field_mousewheel)
         # Map bindings cover inputs in dialogs opened after the main window.
         for widget_class in self.FIELD_CLASSES:
             self.root.bind_class(widget_class, "<Map>", self._field_mapped, add="+")
-        self._register_existing(self.root)
-
-    def _register_existing(self, widget):
-        self._register_field(widget)
-        for child in widget.winfo_children():
-            self._register_existing(child)
+        for widget in walk_widgets(self.root):
+            self._register_field(widget)
 
     def _register_field(self, widget):
         if not isinstance(widget, tk.Misc) or widget.winfo_class() not in self.FIELD_CLASSES:

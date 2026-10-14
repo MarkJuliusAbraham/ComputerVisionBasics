@@ -1,11 +1,15 @@
 """One live hand report shared by debugging widgets and settings previews."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
+
+from gestures.hand_report import HandReport
 
 
 @dataclass(frozen=True)
 class LiveHandData:
-    records: tuple = ()
+    records: tuple[HandReport, ...] = ()
     enabled: bool = True
     paused: bool = False
     blocking_reason: str = ""
@@ -20,7 +24,7 @@ class LiveHandData:
 
     @property
     def preview_fingers(self):
-        return self.records[0]["state"].fingers if self.records else None
+        return self.records[0].state.fingers if self.records else None
 
     @property
     def preview_status(self):
@@ -28,8 +32,8 @@ class LiveHandData:
             return self.tracking_status
         if not self.records:
             return "No hand detected"
-        return f"Live data · {self.records[0]['handedness']} hand"
+        return f"Live data · {self.records[0].handedness} hand"
 
     @property
     def by_hand(self):
-        return {record["handedness"]: record for record in self.records}
+        return {record.handedness: record for record in self.records}

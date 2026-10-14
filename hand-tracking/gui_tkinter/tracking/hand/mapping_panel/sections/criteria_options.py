@@ -1,18 +1,21 @@
 """Choices shared by the two finger criteria editing modes."""
 
-from gestures.finger_classifier import FINGER_CATEGORIES_BY_COUNT, FINGERS
+from gestures.finger_classifier import ALL_FINGER_CATEGORIES, FINGER_CATEGORIES_BY_COUNT
+from gestures.hand_landmarks import FINGER_NAMES
+from gestures.palm_detector import PalmPosition
 
 
-PALM_OPTIONS = {
-    "Any": None,
-    "Facing camera": "facing_camera",
-    "Not facing camera": "not_facing_camera",
-}
-FINGER_NAMES = tuple(FINGERS)
+PALM_OPTIONS = {"Any": None, **{position.label: position.value for position in PalmPosition}}
 # Stable profile keys include inactive classifications so saved rules survive
 # changes to the detector's segment count.
-FINGER_OPTIONS = tuple(category.value for category in FINGER_CATEGORIES_BY_COUNT[6])
+FINGER_OPTIONS = tuple(category.value for category in ALL_FINGER_CATEGORIES)
+CATEGORY_LABELS = {category.value: category.label for category in ALL_FINGER_CATEGORIES}
 CUSTOM_CLASSIFICATIONS = "Custom classifications"
+
+__all__ = [
+    "CATEGORY_LABELS", "CUSTOM_CLASSIFICATIONS", "FINGER_NAMES", "FINGER_OPTIONS",
+    "FingerCriteriaOptions", "PALM_OPTIONS",
+]
 
 
 class FingerCriteriaOptions:
