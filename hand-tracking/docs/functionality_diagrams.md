@@ -23,6 +23,7 @@ application's Light theme palette, with pale fills for readable labels.
 **Audience:** Someone seeing the project for the first time.
 
 ```mermaid
+%%{init: {"theme": "base", "htmlLabels": false, "flowchart": {"htmlLabels": false}, "themeCSS": ".edgeLabel rect, .labelBkg { fill: #ffffff !important; opacity: 1 !important; }", "themeVariables": {"primaryTextColor": "#202020", "textColor": "#202020", "lineColor": "#8a8a8a", "edgeLabelBackground": "#ffffff", "clusterBkg": "#f7f7f7", "clusterBorder": "#808080", "titleColor": "#202020", "background": "#ffffff"}}}%%
 flowchart LR
     Webcam{{"Webcam"}}:::external --> Video[/"Live video"/]:::data
     Video --> Understand["Read your hand<br/>and recognize a gesture"]:::component
@@ -46,6 +47,7 @@ block shows that information to the user.
 features connect.
 
 ```mermaid
+%%{init: {"theme": "base", "htmlLabels": false, "flowchart": {"htmlLabels": false}, "themeCSS": ".edgeLabel rect, .labelBkg { fill: #ffffff !important; opacity: 1 !important; }", "themeVariables": {"primaryTextColor": "#202020", "textColor": "#202020", "lineColor": "#8a8a8a", "edgeLabelBackground": "#ffffff", "clusterBkg": "#f7f7f7", "clusterBorder": "#808080", "titleColor": "#202020", "background": "#ffffff"}}}%%
 flowchart TD
     Webcam{{"Webcam"}}:::external --> Locate["Locate hand joints"]:::component
     Locate --> Landmarks[/"Finger and wrist<br/>positions"/]:::data
@@ -84,6 +86,7 @@ whether a matched gesture can send a new command.
 **Audience:** Someone maintaining the code or tracing its data flow.
 
 ```mermaid
+%%{init: {"theme": "base", "htmlLabels": false, "flowchart": {"htmlLabels": false}, "themeCSS": ".edgeLabel rect, .labelBkg { fill: #ffffff !important; opacity: 1 !important; }", "themeVariables": {"primaryTextColor": "#202020", "textColor": "#202020", "lineColor": "#8a8a8a", "edgeLabelBackground": "#ffffff", "clusterBkg": "#f7f7f7", "clusterBorder": "#808080", "titleColor": "#202020", "background": "#ffffff"}}}%%
 flowchart TD
     Webcam{{"Webcam"}}:::external --> Camera["Camera<br/>Capture worker"]:::component
     Camera --> Frame[/"Frame<br/>BGR NumPy image"/]:::data

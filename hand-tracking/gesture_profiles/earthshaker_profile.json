@@ -25,10 +25,16 @@
     }
   },
   "repeat_settings": {
-    "initial_displacement": 0.029999999329447746,
-    "distance_threshold": 0.09000000357627869,
+    "initial_displacement": 0.025,
+    "distance_threshold": 0.09,
     "min_interval_seconds": 0.05,
-    "max_repeats": 2
+    "max_repeats": 2,
+    "axis_weights": {
+      "x": 1.0,
+      "y": 1.0,
+      "z": 0.0
+    },
+    "buffer_credit": 0.0
   },
   "gestures": [
     {
@@ -62,7 +68,24 @@
         ],
         "delay_ms_between_steps": 0
       },
-      "tracked_finger": "index"
+      "tracking": {
+        "fingers": [
+          "index"
+        ]
+      },
+      "repeat_settings": {
+        "initial_displacement": 0.025,
+        "distance_threshold": 0.09,
+        "min_interval_seconds": 0.05,
+        "max_repeats": 2,
+        "axis_weights": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 0.0
+        },
+        "buffer_credit": 0.0
+      },
+      "use_optimistic_tracking": true
     },
     {
       "id": "q",
@@ -93,11 +116,24 @@
         ],
         "delay_ms_between_steps": 0
       },
-      "tracked_finger": "index",
-      "repeat_fingers": [
-        "index",
-        "middle"
-      ]
+      "tracking": {
+        "fingers": [
+          "index"
+        ]
+      },
+      "repeat_settings": {
+        "initial_displacement": 0.025,
+        "distance_threshold": 0.09,
+        "min_interval_seconds": 0.05,
+        "max_repeats": 2,
+        "axis_weights": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 0.0
+        },
+        "buffer_credit": 0.0
+      },
+      "use_optimistic_tracking": true
     },
     {
       "id": "w",
@@ -130,11 +166,24 @@
         ],
         "delay_ms_between_steps": 0
       },
-      "tracked_finger": "middle",
-      "repeat_fingers": [
-        "middle",
-        "ring"
-      ]
+      "tracking": {
+        "fingers": [
+          "middle"
+        ]
+      },
+      "repeat_settings": {
+        "initial_displacement": 0.025,
+        "distance_threshold": 0.09,
+        "min_interval_seconds": 0.05,
+        "max_repeats": 2,
+        "axis_weights": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 0.0
+        },
+        "buffer_credit": 0.0
+      },
+      "use_optimistic_tracking": true
     },
     {
       "id": "gesture_11e44285",
@@ -167,7 +216,22 @@
         ],
         "delay_ms_between_steps": 0
       },
-      "tracked_finger": null
+      "tracking": {
+        "fingers": []
+      },
+      "repeat_settings": {
+        "initial_displacement": 0.025,
+        "distance_threshold": 0.09,
+        "min_interval_seconds": 0.05,
+        "max_repeats": 2,
+        "axis_weights": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 0.0
+        },
+        "buffer_credit": 0.0
+      },
+      "use_optimistic_tracking": true
     }
   ]
 }

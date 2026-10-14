@@ -6,17 +6,17 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
-from gestures.gesture_config import (
+from hand_tracking.gestures.gesture_config import (
     CommandSequence,
     CommandStep,
     GestureConfig,
     GestureDefinition,
     GestureMatch,
 )
-from gestures.tracking.settings import GestureTrackingSettings
-from input.command_executor import CommandExecutor
-from input.command_modifier import CommandModifier
-from settings.settings_manager import Settings, SettingsData
+from hand_tracking.gestures.tracking.settings import GestureTrackingSettings
+from hand_tracking.input.command_executor import CommandExecutor
+from hand_tracking.input.command_modifier import CommandModifier
+from hand_tracking.settings.settings_manager import Settings, SettingsData
 
 
 class RecordingInput:
@@ -95,7 +95,7 @@ class CoreContractTests(unittest.TestCase):
         sequence = sample_profile().definitions[0].commands
 
         # Both submissions happen before any scheduled key release is due.
-        with patch("input.command_executor.time.monotonic", return_value=0.0):
+        with patch("hand_tracking.input.command_executor.time.monotonic", return_value=0.0):
             executor.execute(sequence, modifier=CommandModifier(repeat_count=2))
             executor.execute(sequence)
         self.assertEqual(keyboard.events, [("press", "a")])

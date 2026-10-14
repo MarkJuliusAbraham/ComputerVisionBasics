@@ -2,22 +2,21 @@
 
 from contextlib import ExitStack
 
-from app_components import FrameOverlays, HandPipeline, VideoIO
-from application import Application
-from camera import Camera
-from camera_preview import CameraPreview
-from custom_overlay.invoker_overlay import InvokerOverlay
-from debug_overlay import DebugOverlay
-from gestures.detector import Detector
-from gesture_handler import GestureHandler
-from gesture_path_overlay import GesturePathOverlay
-from hand_drawer import HandDrawer
-from hand_tracker import HandTracker
-from image_module.image_overlay import ImageOverlay
-from settings.settings_manager import Settings
-from gui_tkinter.components.dpi import enable_dpi_awareness
-from gui_tkinter.core.native_window_style import FixedNativeWindowStyle
-
+from hand_tracking.app.application import Application
+from hand_tracking.app.components import FrameOverlays, HandPipeline, VideoIO
+from hand_tracking.capture.camera import Camera
+from hand_tracking.capture.camera_preview import CameraPreview
+from hand_tracking.frame_overlays.invoker_overlay import InvokerOverlay
+from hand_tracking.frame_overlays.debug_overlay import DebugOverlay
+from hand_tracking.frame_overlays.gesture_path_overlay import GesturePathOverlay
+from hand_tracking.frame_overlays.hand_drawer import HandDrawer
+from hand_tracking.gestures.detector import Detector
+from hand_tracking.gestures.gesture_handler import GestureHandler
+from hand_tracking.ui.components.dpi import enable_dpi_awareness
+from hand_tracking.ui.core.native_window_style import FixedNativeWindowStyle
+from hand_tracking.frame_overlays.image_overlay import ImageOverlay
+from hand_tracking.landmarker.hand_tracker import HandTracker
+from hand_tracking.settings.settings_manager import Settings
 
 def open_video(startup: ExitStack) -> VideoIO:
     camera = Camera()
