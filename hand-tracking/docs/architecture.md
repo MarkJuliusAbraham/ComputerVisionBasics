@@ -28,7 +28,7 @@ them. The shapes and theme-derived colors match `functionality_diagrams.md`.
 flowchart TD
     Webcam{{"Webcam"}}:::external --> Capture["Camera · capture worker<br/>OpenCV VideoCapture.read"]:::component
     Capture --> Frames[/"Latest frame buffer<br/>BGR NumPy image"/]:::data
-    Frames --> App["Application · Tk event-loop tick<br/>Read a frame copy; check tracking state"]:::component
+    Frames --> App["TrackingEngine.process_frame<br/>Scheduled by Application on Tk;<br/>read a frame copy; check tracking state"]:::component
 
     App --> Tracker["HandTracker"]:::component
     Tracker --> Session["HandLandmarkerSession<br/>BGR → RGB; timestamp; detect_async"]:::component
@@ -55,7 +55,7 @@ flowchart TD
     Report --> Overlay("Optional desktop overlay<br/>RGBA renderer → Windows layered window"):::view
     Report --> SettingsPreview("Optional settings preview<br/>Live finger data + draft thresholds"):::view
 
-    App --> Compose["Application · camera-frame composition<br/>Landmarks, mirror, paths and feedback"]:::component
+    App --> Compose["TrackingEngine · camera-frame composition<br/>Landmarks, mirror, paths and feedback"]:::component
     Results --> Compose
     Handler --> Paths[/"Drawing paths<br/>Selected fingertips + repeat markers"/]:::data
     Paths --> Compose
@@ -74,15 +74,20 @@ flowchart TD
 ### Important execution details
 
 - Arrows show where information goes; data objects do not invoke the next
-  component themselves. `Application` performs the calls between stages.
-- `Application` receives its collaborators in three groups: `VideoIO` (camera
-  and preview window), `HandPipeline` (tracker, detector, gesture handler),
-  and `FrameOverlays` (everything drawn on the frame). Each group closes its
-  own resources. `TrackingSwitches` holds the enable, pause, and
-  command-activity switches that decide whether a frame is analyzed.
-- `Application` coordinates the frame loop through Tk's `after` callbacks.
-  Gesture classification, matching, command scheduling, and UI updates run on
-  that thread.
+  component themselves. `TrackingEngine` performs the calls between stages.
+- The code is split into `hand_tracking/backend/` and `hand_tracking/frontend/`.
+  The backend never imports the frontend (a test enforces this). The frontend
+  displays backend data and calls backend services; `main.py` connects them.
+- `TrackingEngine` (backend) receives the `Camera`, a `HandPipeline` (tracker,
+  detector, gesture handler), and `FrameOverlays` (everything drawn on the
+  frame). Each group closes its own resources. `TrackingSwitches` holds the
+  enable, pause, and command-activity switches that decide whether a frame is
+  analyzed. `process_frame` returns a `FrameResult`: camera and model status,
+  the hand reports, and the annotated frame.
+- `Application` (frontend) owns the control windows and the `CameraPreview`.
+  It schedules `TrackingEngine.process_frame` through Tk's `after` callbacks
+  and shows each `FrameResult`. Gesture classification, matching, command
+  scheduling, and UI updates all run on that thread.
 - `Camera` captures independently and publishes a latest-frame buffer and a
   `CameraStatus`. The application receives a copy because it modifies the
   displayed frame, and passes the frame's aspect ratio to the detector.
@@ -151,7 +156,7 @@ another initial command from being issued.
 %%{init: {"theme": "base", "htmlLabels": false, "flowchart": {"htmlLabels": false}, "themeCSS": ".edgeLabel rect, .labelBkg { fill: #ffffff !important; opacity: 1 !important; }", "themeVariables": {"primaryTextColor": "#202020", "textColor": "#202020", "lineColor": "#8a8a8a", "edgeLabelBackground": "#ffffff", "clusterBkg": "#f7f7f7", "clusterBorder": "#808080", "titleColor": "#202020", "background": "#ffffff"}}}%%
 flowchart LR
     SettingsUI("Hub / hand settings UI<br/>Draft → Apply"):::view --> Values[/"SettingsValues<br/>Submitted fields"/]:::data
-    Values --> Apply["Application.apply_changes"]:::component
+    Values --> Apply["Application → TrackingEngine.apply_changes"]:::component
     Apply --> Settings["Settings<br/>Update and persist values"]:::component
     Settings --> SettingsData[/"SettingsData<br/>Applied configuration"/]:::data
     Settings --> SettingsFile[("Settings JSON")]:::config
@@ -165,7 +170,7 @@ flowchart LR
     Session --> Profile[/"GestureConfig<br/>Definitions, reset rule and repeat defaults"/]:::data
     Profile -->|"Save"| ProfileFile[("Gesture profile JSON")]:::config
     Session --> SelectionFile[("Active-profile selection JSON")]:::config
-    Profile --> ConfigApply["Application.apply_gesture_config"]:::component
+    Profile --> ConfigApply["TrackingEngine.apply_gesture_config"]:::component
     ConfigApply --> Handler["GestureHandler.configure<br/>Criteria, commands, tracked fingers,<br/>reset rule and repeat settings"]:::component
 
     OverlayUI("Overlay options<br/>Preview → Save / Discard"):::view --> OverlayData[/"OverlaySettings<br/>Style, background opacity and position"/]:::data
@@ -188,22 +193,25 @@ management changes notify the application through the mapping callback.
 ## Project layout
 
 All Python code lives in the `hand_tracking/` package, except `main.py`, the
-entry point. The folders inside it are namespace packages, so they have no
+entry point. The package has two halves: `backend/` (capture, recognition,
+commands, settings, and the frame engine, with no UI code) and `frontend/`
+(everything the user sees). The frontend may import the backend, never the
+reverse. The folders inside it are namespace packages, so they have no
 `__init__.py`; import each class from the module that defines it.
 
 | Folder | Contents |
 | --- | --- |
 | `main.py` | Entry point and composition root |
-| `hand_tracking/app/` | Application coordination: the frame loop, its collaborators, and frame timing |
-| `hand_tracking/capture/` | Camera capture on a worker thread, its published status, and the preview window |
-| `hand_tracking/landmarker/` | Model assets, loading, and inference for the hand landmark backend |
-| `hand_tracking/gestures/` | Finger classification, gesture matching, profiles, and movement rules (`optimistic/`, `tracking/`, `repeating/`) |
-| `hand_tracking/input/` | Command scheduling and keyboard simulation |
-| `hand_tracking/frame_overlays/` | Drawings added to the camera frame, including the Invoker overlay and its images |
-| `hand_tracking/settings/` | Settings data, validation, and persistence code |
-| `hand_tracking/common/` | Dependency-free helpers and the project folder locations (`project_paths.py`) |
-| `hand_tracking/ui/` | Tkinter control surface: `core/` window composition and shared state, `components/` reusable widgets, and the feature panels |
-| `hand_tracking/sounds/` | Unused sound helper (see `dead_code_checklist.md`) |
+| `hand_tracking/backend/engine/` | `TrackingEngine`: per-frame processing, its collaborators, and frame timing |
+| `hand_tracking/backend/capture/` | Camera capture on a worker thread and its published status |
+| `hand_tracking/backend/landmarker/` | Model assets, loading, and inference for the hand landmark backend |
+| `hand_tracking/backend/gestures/` | Finger classification, gesture matching, profiles, and movement rules (`optimistic/`, `tracking/`, `repeating/`) |
+| `hand_tracking/backend/input/` | Command scheduling and keyboard simulation |
+| `hand_tracking/backend/frame_overlays/` | Drawings added to the camera frame, including the Invoker overlay and its images |
+| `hand_tracking/backend/settings/` | Settings data, validation, and persistence code |
+| `hand_tracking/backend/common/` | Dependency-free helpers and the project folder locations (`project_paths.py`) |
+| `hand_tracking/frontend/` | Everything the user sees: `application.py` (runs the windows and schedules the engine), `camera_preview.py`, the Tkinter control surface (`core/` window composition and shared state, `components/` reusable widgets), and the feature panels |
+| `hand_tracking/backend/sounds/` | Unused sound helper (see `dead_code_checklist.md`) |
 | `settings/` | Saved settings and the active gesture profile selection (JSON) |
 | `gesture_profiles/` | Saved gesture profiles |
 | `tasks/` | MediaPipe model bundles |
@@ -213,17 +221,18 @@ entry point. The folders inside it are namespace packages, so they have no
 
 | Responsibility | Location |
 | --- | --- |
-| Startup and dependency composition | `main.py` builds `VideoIO`, `HandPipeline`, and `FrameOverlays` (`hand_tracking/app/components.py`) |
-| Frame processing and coordination | `hand_tracking/app/application.py`, `hand_tracking/app/frame_profiler.py` |
-| Camera capture and device switching | `hand_tracking/capture/camera.py`, `hand_tracking/capture/camera_status.py` |
-| Tracker facade and inference session | `hand_tracking/landmarker/hand_tracker.py`, `hand_tracking/landmarker/session.py` |
-| Asynchronous model loading | `hand_tracking/landmarker/model_loader.py` |
-| Hand landmark model (indices, fingers, handedness) | `hand_tracking/gestures/hand_landmarks.py` |
-| Landmark classification | `hand_tracking/gestures/detector.py`, `hand_tracking/gestures/finger_classifier.py`, `hand_tracking/gestures/finger_thresholds.py`, `hand_tracking/gestures/palm_detector.py` |
-| Gesture orchestration and matching | `hand_tracking/gestures/gesture_handler.py`, `hand_tracking/gestures/gesture_matcher.py` |
-| Wrist history, paths and movement repeats | `hand_tracking/gestures/optimistic/`, `hand_tracking/gestures/tracking/`, `hand_tracking/gestures/repeating/` |
-| Command scheduling and keyboard simulation | `hand_tracking/input/command_executor.py`, `hand_tracking/input/input_simulator.py` |
-| Shared hand UI report and views | `hand_tracking/ui/tracking/hand/module.py`, `hand_tracking/ui/tracking/hand/debug_panel/` |
-| Desktop overlay | `hand_tracking/ui/tracking/hand/overlay/`, `hand_tracking/ui/components/overlays/` |
-| Camera-frame drawings and preview window | `hand_tracking/frame_overlays/`, `hand_tracking/capture/camera_preview.py` |
-| Settings and gesture-profile persistence | `hand_tracking/settings/settings_manager.py`, `hand_tracking/gestures/gesture_config.py`, `hand_tracking/gestures/profile_manager.py`, `hand_tracking/common/json_storage.py`, `hand_tracking/common/config_values.py` |
+| Startup and dependency composition | `main.py` builds `HandPipeline` and `FrameOverlays` (`hand_tracking/backend/engine/components.py`), the `TrackingEngine`, and the frontend `Application` |
+| Frame processing | `hand_tracking/backend/engine/engine.py`, `hand_tracking/backend/engine/frame_profiler.py` |
+| Frame scheduling and display | `hand_tracking/frontend/application.py` |
+| Camera capture and device switching | `hand_tracking/backend/capture/camera.py`, `hand_tracking/backend/capture/camera_status.py` |
+| Tracker facade and inference session | `hand_tracking/backend/landmarker/hand_tracker.py`, `hand_tracking/backend/landmarker/session.py` |
+| Asynchronous model loading | `hand_tracking/backend/landmarker/model_loader.py` |
+| Hand landmark model (indices, fingers, handedness) | `hand_tracking/backend/gestures/hand_landmarks.py` |
+| Landmark classification | `hand_tracking/backend/gestures/detector.py`, `hand_tracking/backend/gestures/finger_classifier.py`, `hand_tracking/backend/gestures/finger_thresholds.py`, `hand_tracking/backend/gestures/palm_detector.py` |
+| Gesture orchestration and matching | `hand_tracking/backend/gestures/gesture_handler.py`, `hand_tracking/backend/gestures/gesture_matcher.py` |
+| Wrist history, paths and movement repeats | `hand_tracking/backend/gestures/optimistic/`, `hand_tracking/backend/gestures/tracking/`, `hand_tracking/backend/gestures/repeating/` |
+| Command scheduling and keyboard simulation | `hand_tracking/backend/input/command_executor.py`, `hand_tracking/backend/input/input_simulator.py` |
+| Shared hand UI report and views | `hand_tracking/frontend/tracking/hand/module.py`, `hand_tracking/frontend/tracking/hand/debug_panel/` |
+| Desktop overlay | `hand_tracking/frontend/tracking/hand/overlay/`, `hand_tracking/frontend/components/overlays/` |
+| Camera-frame drawings and preview window | `hand_tracking/backend/frame_overlays/`, `hand_tracking/frontend/camera_preview.py` |
+| Settings and gesture-profile persistence | `hand_tracking/backend/settings/settings_manager.py`, `hand_tracking/backend/gestures/gesture_config.py`, `hand_tracking/backend/gestures/profile_manager.py`, `hand_tracking/backend/common/json_storage.py`, `hand_tracking/backend/common/config_values.py` |

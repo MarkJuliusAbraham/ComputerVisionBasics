@@ -90,7 +90,7 @@ whether a matched gesture can send a new command.
 flowchart TD
     Webcam{{"Webcam"}}:::external --> Camera["Camera<br/>Capture worker"]:::component
     Camera --> Frame[/"Frame<br/>BGR NumPy image"/]:::data
-    Frame --> App["Application<br/>Tk event-loop coordinator"]:::component
+    Frame --> App["TrackingEngine<br/>Frame coordinator, scheduled on Tk"]:::component
     App --> Tracker["HandTracker"]:::component
     Tracker --> Session["HandLandmarkerSession"]:::component
     Session -->|"Image + timestamp"| MP{{"MediaPipe<br/>Hand Landmarker"}}:::external
@@ -133,7 +133,7 @@ flowchart TD
 
 ### Reading the developer view
 
-- `Application` performs the calls between pipeline stages. The arrows show
+- `TrackingEngine` performs the calls between pipeline stages. The arrows show
   where information goes; data objects do not call the next component themselves.
 - `HandTracker.detect` delegates to the active `HandLandmarkerSession`, which
   submits an image and returns the latest completed result. The callback and
@@ -149,7 +149,7 @@ flowchart TD
   `GesturePathTracker`, and `MovementRepeatController`. These helpers are
   grouped within the handler block in this view.
 - `HandDrawer`, `GesturePathOverlay`, and `InvokerOverlay` contribute to the
-  annotated frame under `Application`'s coordination. `CameraPreview` receives
+  annotated frame under `TrackingEngine`'s coordination. `CameraPreview` receives
   the finished image, not the raw path objects.
 - Capture, inference, model loading, and the camera preview run outside the Tk
   thread. Classification, gesture handling, command scheduling, and ordinary

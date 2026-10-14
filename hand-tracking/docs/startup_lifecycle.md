@@ -9,18 +9,20 @@ are calls or data; dashed arrows are configuration or deferred work.
 
 ## Overview
 
-`main.py` is the composition root. It loads the settings, builds three groups
-of collaborators, hands them to `Application`, and starts the Tk event loop.
+`main.py` is the composition root. It loads the settings, builds the backend
+collaborators, hands them to the backend `TrackingEngine`, wraps the engine and
+the camera preview in the frontend `Application`, and starts the Tk event loop.
 Until `Application` is fully constructed, `main.py` owns cleanup; afterwards,
 `Application.close` does.
 
 | Phase | Where | Result |
 | --- | --- | --- |
 | 1. Prepare the process | `main()` | Windows DPI awareness; `Settings` loaded |
-| 2. Build collaborators | `build_application()` | `VideoIO`, `HandPipeline`, `FrameOverlays` |
-| 3. Build the application | `Application.__init__` | Settings applied; hand module and hub window created |
-| 4. Run | `Application.run()` | Tk event loop with the frame loop scheduled on it |
-| 5. Shut down | `Application.close()` | Input released, inference stopped, windows and devices closed |
+| 2. Build collaborators | `build_application()` | `Camera`, `CameraPreview`, `HandPipeline`, `FrameOverlays` |
+| 3. Build the engine | `TrackingEngine.__init__` | Settings applied to the pipeline and switches |
+| 4. Build the frontend | `Application.__init__` | Hand module and hub window created |
+| 5. Run | `Application.run()` | Tk event loop with the frame loop scheduled on it |
+| 6. Shut down | `Application.close()` | Input released, inference stopped, camera released, windows closed |
 
 ## Startup sequence
 
@@ -33,8 +35,7 @@ flowchart TD
     LoadSettings --> Data[/"SettingsData"/]:::data
     Data --> Build["build_application(settings)<br/>Startup ExitStack"]:::component
 
-    Build --> Video["open_video<br/>Camera() starts the capture worker;<br/>CameraPreview() starts the display worker"]:::component
-    Video --> VideoIO[/"VideoIO"/]:::data
+    Build --> Video["open_camera, open_preview<br/>Camera() starts the capture worker;<br/>CameraPreview() starts the display worker"]:::component
     Webcam{{"Webcam (index 1)"}}:::external -.-> Video
 
     Build --> Invoker["InvokerOverlay()<br/>Loads spell icons"]:::component
@@ -48,18 +49,20 @@ flowchart TD
     Invoker --> Overlays
     Overlays --> FrameOverlays[/"FrameOverlays"/]:::data
 
-    VideoIO --> App["Application(settings, video, pipeline, overlays)"]:::component
-    HandPipeline --> App
-    FrameOverlays --> App
-    Data --> App
-    App --> Apply["apply_settings<br/>Detector, optimistic tracking, model path, switches"]:::component
+    Video --> Engine["TrackingEngine(settings, camera, pipeline, overlays)"]:::component
+    HandPipeline --> Engine
+    FrameOverlays --> Engine
+    Data --> Engine
+    Engine --> Apply["apply_settings<br/>Detector, optimistic tracking, model path, switches"]:::component
+    Engine --> App["Application(engine, preview)"]:::component
+    Video --> App
     App --> Module["HandTrackingModule<br/>Debug, settings, and mapping panels (not built yet)"]:::component
     App --> Hub["ControlWindow<br/>Tk root, notebook, theme, Main/Settings panels"]:::component
     Hub --> HubView("Tracking hub window"):::view
 
     App --> Handoff["startup.pop_all()<br/>Application now owns cleanup"]:::component
     Handoff --> Run["Application.run()<br/>after(0, _process_frame); mainloop()"]:::component
-    Run -.->|"Every tick"| Frame["_process_frame<br/>Read, analyze, draw, display"]:::component
+    Run -.->|"Every tick"| Frame["_process_frame<br/>engine.process_frame, then display the result"]:::component
     Frame --> Preview("Camera preview window<br/>Created with the first frame"):::view
 
     classDef component fill:#d1e7f7,stroke:#0078d4,color:#202020,stroke-width:2px;
@@ -89,18 +92,19 @@ flowchart TD
    - `Detector` is configured from the current finger thresholds.
 4. **Create frame overlays.** The landmark drawer is shared with the gesture
    path overlay so both use the same finger colors.
-5. **Construct `Application`.**
-   - `apply_settings` configures the pipeline. The model path matches the one
-     already requested, so no second load is started.
+5. **Construct `TrackingEngine`.** `apply_settings` configures the pipeline.
+   The model path matches the one already requested, so no second load is
+   started.
+6. **Construct `Application`.**
    - `HandTrackingModule` creates its debugging, settings, and mapping panel
      objects. Their widgets, the tracking window, and the mapping editor's
      profile session are built later, when the user opens the workspace.
    - `ControlWindow` creates the hidden Tk root, the notebook shell, applies the
      theme and UI scale, builds the Main and Settings panels, installs input
      handling, and then shows the hub.
-6. **Hand over ownership.** `startup.pop_all()` removes the startup cleanup
+7. **Hand over ownership.** `startup.pop_all()` removes the startup cleanup
    callbacks; `Application.close` is now responsible for every resource.
-7. **Run.** `run()` schedules the first `_process_frame` and enters the Tk
+8. **Run.** `run()` schedules the first `_process_frame` and enters the Tk
    event loop. Until the camera delivers a frame, each tick retries after
    10 ms. Until the model worker finishes, the debugging page reports
    "Loading landmarker model…" and no detection runs.
@@ -110,8 +114,8 @@ flowchart TD
 | Thread | Started by | Stopped by |
 | --- | --- | --- |
 | Tk main thread | The process | `mainloop()` returning |
-| Camera capture worker | `Camera()` | `Camera.release` (via `VideoIO.close`) |
-| Camera preview worker (`camera-preview`) | `CameraPreview()` | `CameraPreview.close` (via `VideoIO.close`) |
+| Camera capture worker | `Camera()` | `Camera.release` (via `TrackingEngine.close`) |
+| Camera preview worker (`camera-preview`) | `CameraPreview()` | `CameraPreview.close` (via `Application.close`) |
 | Model loader (`hand-model-loader`) | `HandTracker()` | `HandTracker.close` (via `HandPipeline.close`) |
 | MediaPipe inference | The loaded `HandLandmarkerSession` | Session closed when the loader retires it |
 
@@ -131,9 +135,9 @@ flowchart TD
     end
     subgraph Normal["Normal exit"]
         direction TB
-        N1["HandPipeline.close<br/>GestureHandler.close → HandTracker.close"]:::component
+        N1["TrackingEngine.close<br/>HandPipeline.close (GestureHandler → HandTracker),<br/>then Camera.release"]:::component
         N1 --> N2["ControlWindow.close<br/>Tracking windows, then Tk root"]:::component
-        N2 --> N3["VideoIO.close<br/>CameraPreview.close → Camera.release"]:::component
+        N2 --> N3["CameraPreview.close"]:::component
     end
     Keys{{"Keyboard (pynput)"}}:::external
     F1 -.->|"Release held keys"| Keys
@@ -148,8 +152,9 @@ flowchart TD
   `running = False` and stops the event loop; `run()` then calls `close()`.
 - **Ctrl+C.** A `KeyboardInterrupt` in the event loop also ends `run()`, and
   `close()` still runs from its `finally` block.
-- **Cleanup order.** `HandPipeline.close` runs first so no key stays pressed,
-  then the windows close, then `VideoIO.close` stops the preview and camera.
+- **Cleanup order.** `TrackingEngine.close` runs first: `HandPipeline.close`
+  so no key stays pressed, then `Camera.release`. Then the control windows
+  close, and finally the camera preview.
   Each group uses an `ExitStack`, so a failure in one cleanup does not skip the
   others.
 - **Failure during startup.** If any step in `build_application` raises,
@@ -159,7 +164,8 @@ flowchart TD
 
 ## Restart is not a new startup
 
-The hub's Restart button calls `Application.request_restart`. It re-requests
+The hub's Restart button calls `Application.request_restart`, which asks the
+`TrackingEngine` to restart the camera and hand tracking. It re-requests
 the current camera, forces a model reload, re-applies the gesture mapping, and
 clears hand state, pause, and the Invoker overlay. Windows, panels, and the
 `Settings` object are kept.

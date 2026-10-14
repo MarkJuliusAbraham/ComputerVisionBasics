@@ -1,22 +1,25 @@
 """Durable behavior checks, independent of the UI and tracking hardware."""
 
+import ast
 import tempfile
 import unittest
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
-from hand_tracking.gestures.gesture_config import (
+from hand_tracking.backend.gestures.gesture_config import (
     CommandSequence,
     CommandStep,
     GestureConfig,
     GestureDefinition,
     GestureMatch,
 )
-from hand_tracking.gestures.tracking.settings import GestureTrackingSettings
-from hand_tracking.input.command_executor import CommandExecutor
-from hand_tracking.input.command_modifier import CommandModifier
-from hand_tracking.settings.settings_manager import Settings, SettingsData
+from hand_tracking.backend.gestures.tracking.settings import GestureTrackingSettings
+from hand_tracking.backend.input.command_executor import CommandExecutor
+from hand_tracking.backend.input.command_modifier import CommandModifier
+from hand_tracking.backend.settings.settings_manager import Settings, SettingsData
+
+BACKEND_DIR = Path(__file__).resolve().parents[1] / "hand_tracking" / "backend"
 
 
 class RecordingInput:
@@ -95,7 +98,7 @@ class CoreContractTests(unittest.TestCase):
         sequence = sample_profile().definitions[0].commands
 
         # Both submissions happen before any scheduled key release is due.
-        with patch("hand_tracking.input.command_executor.time.monotonic", return_value=0.0):
+        with patch("hand_tracking.backend.input.command_executor.time.monotonic", return_value=0.0):
             executor.execute(sequence, modifier=CommandModifier(repeat_count=2))
             executor.execute(sequence)
         self.assertEqual(keyboard.events, [("press", "a")])
@@ -108,6 +111,26 @@ class CoreContractTests(unittest.TestCase):
             executor.update(now=now)
         executor.clear()
         self.assertEqual(keyboard.events, [("press", "a"), ("release", "a")])
+
+
+    def test_backend_does_not_import_frontend(self) -> None:
+        """The backend only provides data and services; the frontend depends on it."""
+        violations = []
+        for source in BACKEND_DIR.rglob("*.py"):
+            tree = ast.parse(source.read_text(encoding="utf-8-sig"), filename=str(source))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    modules = [alias.name for alias in node.names]
+                elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                    modules = [node.module]
+                else:
+                    continue
+                violations += [
+                    f"{source.relative_to(BACKEND_DIR)}:{node.lineno} imports {module}"
+                    for module in modules
+                    if module.startswith(("hand_tracking.frontend", "tkinter"))
+                ]
+        self.assertEqual(violations, [])
 
 
 if __name__ == "__main__":
