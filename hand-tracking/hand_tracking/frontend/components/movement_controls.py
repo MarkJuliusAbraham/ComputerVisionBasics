@@ -76,7 +76,7 @@ class NumericFieldGroup(ttk.Frame):
         self.axes = layout.pack(
             AxisWeightsControl(self, {axis: self.variables[axis] for axis in axes}, appearance),
             fill="x", pady=(12, 0),
-        )
+        ) if axes else None
         self.changes.watch(*self.variables.values())
 
     def draft_values(self):

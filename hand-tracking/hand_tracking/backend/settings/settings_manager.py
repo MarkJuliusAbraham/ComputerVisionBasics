@@ -1,4 +1,5 @@
 import json
+import math
 import os
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field, replace
@@ -29,6 +30,13 @@ UI_SCALES = ("Auto", "100%", "125%", "150%", "175%", "200%")
 class SettingsData:
     """Portable values that configure the application."""
 
+    one_euro_enabled: bool = False
+    one_euro_min_cutoff_hz: float = 1.0
+    one_euro_beta: float = 0.5
+    finger_hysteresis_enabled: bool = False
+    finger_hysteresis_margin_degrees: float = 3.0
+    finger_settling_enabled: bool = False
+    finger_settling_max_speed: float = 90.0
     track_hands: bool = True
     profile: bool = True
     theme: str = "Light"
@@ -100,11 +108,21 @@ class SettingsData:
         else:
             thresholds = resize_finger_thresholds(thresholds, segment_count)
         data["finger_classification_thresholds"] = thresholds
-        for key in ("track_hands", "profile"):
+        for key in ("track_hands", "profile", "one_euro_enabled", "finger_hysteresis_enabled", "finger_settling_enabled"):
             if key in data and not isinstance(data[key], bool):
                 data[key] = getattr(defaults, key)
         if data.get("finger_deviation_calculation") not in FingerClassifier.CALCULATIONS:
             data["finger_deviation_calculation"] = defaults.finger_deviation_calculation
+        for key in ("one_euro_min_cutoff_hz", "one_euro_beta"):
+            value = data.get(key, getattr(defaults, key))
+            if not _valid_filter_number(value, positive=key.endswith("hz")):
+                data[key] = getattr(defaults, key)
+        margin = data.get("finger_hysteresis_margin_degrees", defaults.finger_hysteresis_margin_degrees)
+        if not _valid_filter_number(margin) or margin > 30:
+            data["finger_hysteresis_margin_degrees"] = defaults.finger_hysteresis_margin_degrees
+        speed = data.get("finger_settling_max_speed", defaults.finger_settling_max_speed)
+        if not _valid_filter_number(speed) or speed > 10000:
+            data["finger_settling_max_speed"] = defaults.finger_settling_max_speed
         return cls(**data)
 
     @property
@@ -151,7 +169,24 @@ class SettingsScope:
         return self.validator(data) if self.validator is not None else ""
 
 
+def _valid_filter_number(value, *, positive=False):
+    return (not isinstance(value, bool) and isinstance(value, (int, float))
+            and math.isfinite(value) and (value > 0 if positive else value >= 0))
+
+
 def _validate_hand_settings(data):
+    if (not isinstance(data.finger_settling_enabled, bool)
+            or not _valid_filter_number(data.finger_settling_max_speed)
+            or data.finger_settling_max_speed > 10000):
+        return "Finger settling speed must be a finite number from 0 to 10000 degrees per second."
+    if (not isinstance(data.finger_hysteresis_enabled, bool)
+            or not _valid_filter_number(data.finger_hysteresis_margin_degrees)
+            or data.finger_hysteresis_margin_degrees > 30):
+        return "Finger hysteresis margin must be a finite number from 0 to 30 degrees."
+    if (not isinstance(data.one_euro_enabled, bool)
+            or not _valid_filter_number(data.one_euro_min_cutoff_hz, positive=True)
+            or not _valid_filter_number(data.one_euro_beta)):
+        return "One Euro cutoff must be positive and speed response nonnegative; both must be finite."
     if not data.has_valid_finger_thresholds():
         return "Thresholds must be strictly increasing between 0° and 120°."
     if not isinstance(data.optimistic_tracking, OptimisticTrackingSettings):
@@ -164,7 +199,9 @@ HAND_SETTINGS_SCOPE = SettingsScope("Hand tracking", (
     "track_hands", "finger_segment_count", "finger_classification_thresholds",
     "finger_deviation_calculation",
     "hand_landmarker_model_path",
-    "optimistic_tracking",
+    "optimistic_tracking", "one_euro_enabled", "one_euro_min_cutoff_hz", "one_euro_beta",
+    "finger_hysteresis_enabled", "finger_hysteresis_margin_degrees",
+    "finger_settling_enabled", "finger_settling_max_speed",
 ), validator=_validate_hand_settings)
 
 
@@ -223,6 +260,9 @@ class Settings:
             raise ValueError("Optimistic Tracking settings must be valid")
         if not isinstance(updated.hand_overlay, OverlaySettings):
             raise ValueError("Overlay settings must be valid")
+        error = _validate_hand_settings(updated)
+        if error:
+            raise ValueError(error)
         previous = self.data
         self.data = updated
         try:

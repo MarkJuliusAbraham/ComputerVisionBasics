@@ -29,10 +29,13 @@
     }
   },
   "repeat_settings": {
+    "trigger": "distance",
+    "shake_amplitude": 0.1,
+    "shake_window_seconds": 0.1,
     "initial_displacement": 0.09,
     "distance_threshold": 0.06,
-    "min_interval_seconds": 0.02,
-    "max_repeats": 2,
+    "min_interval_seconds": 0.025,
+    "max_repeats": 3,
     "axis_weights": {
       "x": 1.0,
       "y": 0.0,
@@ -46,6 +49,10 @@
       "name": "Invoke",
       "match": {
         "fingers": {
+          "thumb": [
+            "partial",
+            "straight"
+          ],
           "index": [
             "straight"
           ],
@@ -58,8 +65,7 @@
           "pinky": [
             "straight"
           ]
-        },
-        "palm": "not_facing_camera"
+        }
       },
       "commands": {
         "steps": [
@@ -74,17 +80,21 @@
         "fingers": []
       },
       "repeat_settings": {
+        "trigger": "distance",
+        "shake_amplitude": 0.1,
+        "shake_window_seconds": 0.1,
         "initial_displacement": 0.09,
         "distance_threshold": 0.06,
-        "min_interval_seconds": 0.02,
-        "max_repeats": 2,
+        "min_interval_seconds": 0.025,
+        "max_repeats": 3,
         "axis_weights": {
           "x": 1.0,
           "y": 0.0,
           "z": 0.0
         },
         "buffer_credit": 0.8
-      }
+      },
+      "use_optimistic_tracking": true
     },
     {
       "id": "q",
@@ -123,22 +133,25 @@
       },
       "tracking": {
         "fingers": [
-          "index",
           "middle"
         ]
       },
       "repeat_settings": {
+        "trigger": "distance",
+        "shake_amplitude": 0.1,
+        "shake_window_seconds": 0.1,
         "initial_displacement": 0.09,
         "distance_threshold": 0.06,
-        "min_interval_seconds": 0.02,
-        "max_repeats": 2,
+        "min_interval_seconds": 0.025,
+        "max_repeats": 3,
         "axis_weights": {
           "x": 1.0,
           "y": 0.0,
           "z": 0.0
         },
         "buffer_credit": 0.8
-      }
+      },
+      "use_optimistic_tracking": true
     },
     {
       "id": "w",
@@ -152,10 +165,8 @@
             "very_curled"
           ],
           "middle": [
-            "closed",
-            "curled",
-            "nearly_closed",
-            "very_curled"
+            "partial",
+            "straight"
           ],
           "ring": [
             "partial",
@@ -183,25 +194,35 @@
         ]
       },
       "repeat_settings": {
+        "trigger": "distance",
+        "shake_amplitude": 0.1,
+        "shake_window_seconds": 0.1,
         "initial_displacement": 0.09,
         "distance_threshold": 0.06,
-        "min_interval_seconds": 0.02,
-        "max_repeats": 2,
+        "min_interval_seconds": 0.025,
+        "max_repeats": 3,
         "axis_weights": {
           "x": 1.0,
           "y": 0.0,
           "z": 0.0
         },
         "buffer_credit": 0.8
-      }
+      },
+      "use_optimistic_tracking": true
     },
     {
       "id": "e",
       "name": "Exort",
       "match": {
         "fingers": {
-          "index": [
+          "thumb": [
+            "closed",
             "curled",
+            "nearly_closed",
+            "partial",
+            "very_curled"
+          ],
+          "index": [
             "partial",
             "straight"
           ],
@@ -238,17 +259,21 @@
         ]
       },
       "repeat_settings": {
+        "trigger": "distance",
+        "shake_amplitude": 0.1,
+        "shake_window_seconds": 0.1,
         "initial_displacement": 0.09,
         "distance_threshold": 0.06,
-        "min_interval_seconds": 0.02,
-        "max_repeats": 2,
+        "min_interval_seconds": 0.025,
+        "max_repeats": 3,
         "axis_weights": {
           "x": 1.0,
           "y": 0.0,
           "z": 0.0
         },
         "buffer_credit": 0.8
-      }
+      },
+      "use_optimistic_tracking": true
     },
     {
       "id": "d",
@@ -289,17 +314,21 @@
         ]
       },
       "repeat_settings": {
+        "trigger": "distance",
+        "shake_amplitude": 0.1,
+        "shake_window_seconds": 0.1,
         "initial_displacement": 0.09,
         "distance_threshold": 0.06,
-        "min_interval_seconds": 0.02,
-        "max_repeats": 2,
+        "min_interval_seconds": 0.025,
+        "max_repeats": 3,
         "axis_weights": {
           "x": 1.0,
           "y": 0.0,
           "z": 0.0
         },
         "buffer_credit": 0.8
-      }
+      },
+      "use_optimistic_tracking": true
     },
     {
       "id": "f",
@@ -309,7 +338,9 @@
           "index": [
             "closed",
             "curled",
-            "partial"
+            "nearly_closed",
+            "partial",
+            "very_curled"
           ],
           "middle": [
             "straight"
@@ -338,17 +369,21 @@
         ]
       },
       "repeat_settings": {
+        "trigger": "distance",
+        "shake_amplitude": 0.1,
+        "shake_window_seconds": 0.1,
         "initial_displacement": 0.09,
         "distance_threshold": 0.06,
-        "min_interval_seconds": 0.02,
-        "max_repeats": 2,
+        "min_interval_seconds": 0.025,
+        "max_repeats": 3,
         "axis_weights": {
           "x": 1.0,
           "y": 0.0,
           "z": 0.0
         },
         "buffer_credit": 0.8
-      }
+      },
+      "use_optimistic_tracking": true
     }
   ]
 }

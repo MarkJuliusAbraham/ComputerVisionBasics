@@ -16,7 +16,7 @@ from .mapping_callbacks import MappingCallbacks
 
 class MappingForm(ttk.Frame):
     def __init__(
-        self, master, *, callbacks: MappingCallbacks, segment_count=4,
+        self, master, *, callbacks: MappingCallbacks, segment_count=4, pose_feed=None,
     ):
         super().__init__(master)
         self.appearance = ThemeMetrics(self)
@@ -47,7 +47,7 @@ class MappingForm(ttk.Frame):
         self.scroll.grid(row=0, column=1, sticky="nsew")
         self.editor = GestureEditorSection(
             self.scroll.content, self.appearance, callbacks.on_change, segment_count,
-            on_repeat_change=callbacks.on_repeat_change,
+            on_repeat_change=callbacks.on_repeat_change, pose_feed=pose_feed,
         )
         layout.pack(self.editor, fill="x", padx=(0, 8))
 

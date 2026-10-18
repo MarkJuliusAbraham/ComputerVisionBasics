@@ -49,3 +49,17 @@ def angle(a, b, c, aspect=1.0) -> float:
     )
 
     return math.degrees(math.acos(cosine))
+
+
+def palm_size(wrist, middle_mcp, index_mcp, pinky_mcp, aspect=1.0) -> float:
+    """Apparent palm size as a fraction of the frame width.
+
+    The larger of the palm length (wrist to middle knuckle) and the knuckle
+    width (index to pinky). Turning the palm foreshortens one of these spans
+    but rarely both, so the larger one stays steady across hand poses.
+    ``aspect`` is the frame's width/height ratio.
+    """
+    def span(a, b):
+        return math.hypot(b.x - a.x, (b.y - a.y) / aspect)
+
+    return max(span(wrist, middle_mcp), span(index_mcp, pinky_mcp))

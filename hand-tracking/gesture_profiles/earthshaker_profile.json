@@ -43,21 +43,27 @@
       "match": {
         "fingers": {
           "thumb": [
+            "partial",
             "straight"
           ],
           "index": [
+            "partial",
             "straight"
           ],
           "middle": [
-            "straight"
+            "closed",
+            "nearly_closed"
           ],
           "ring": [
-            "straight"
+            "closed",
+            "nearly_closed"
           ],
           "pinky": [
+            "partial",
             "straight"
           ]
-        }
+        },
+        "palm": "not_facing_camera"
       },
       "commands": {
         "steps": [

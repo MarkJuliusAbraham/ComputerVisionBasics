@@ -42,7 +42,10 @@ class HandLandmarkerSession:
                 self._latency_samples += 1
         # Results stay within this session, so a retired model cannot overwrite
         # the newly selected model's hand data.
-        self._latest = result
+        self._latest = SimpleNamespace(
+            hand_landmarks=result.hand_landmarks, handedness=result.handedness,
+            hand_world_landmarks=result.hand_world_landmarks, timestamp_ms=timestamp_ms,
+        )
 
     def detect(self, frame):
         h, w = frame.shape[:2]

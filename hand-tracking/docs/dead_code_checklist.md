@@ -39,15 +39,13 @@ Line numbers are from the October 2026 refactor and may drift.
 
 ## Invoker overlay
 
-- [ ] **Spell result never computed.** `InvokerOverlay.pollResult`
-      (`hand_tracking/backend/frame_overlays/invoker_overlay.py:57`) is never called, so
-      `current_image` is never set. As a result:
-  - [ ] `handleDisplay` (`:85`) runs every frame but never draws anything.
-  - [ ] `load_images` reads every spell icon at startup for nothing.
-  - [ ] The `spell_book` entry `1: ""` (`:16`) and the two `print` calls in
-        `pollResult` (`:63`, `:74`) are unreachable.
-  Wire `pollResult` up (for example after the third element command) or
-  remove the image path.
+- [x] **Temporary spell display restored.** Released Q/W/E commands retain
+      the latest three elements; released R resolves the spell and displays its
+      icon in the camera preview for one second. Icons load on demand.
+      The feature owns its stack and observes a generic command callback.
+      To remove it, delete its construction and optional `on_command` and
+      `command_overlay` connections in `main.py`, then remove
+      `hand_tracking/backend/frame_overlays/invoker_overlay.py` and its spell assets.
 
 ## Gestures and settings
 

@@ -1,6 +1,7 @@
 """Own the overlay lifecycle while sharing the debugging report data."""
 
 from collections.abc import Callable
+from contextlib import ExitStack
 import tkinter as tk
 
 from hand_tracking.frontend.components.overlays.window import ClickThroughOverlayWindow
@@ -117,13 +118,20 @@ class HandTrackingOverlay:
             self._window.refresh()
 
     def close(self) -> None:
+        with ExitStack() as cleanup:
+            if self._options is not None:
+                cleanup.callback(self._options.set_enabled, False)
+            if self._window is not None:
+                cleanup.callback(self._window.close)
+        self._window = None
+
+    def hide(self) -> None:
         if self._window is not None:
-            self._window.close()
-            self._window = None
-        if self._options is not None:
-            self._options.set_enabled(False)
+            self._window.hide()
 
     def shutdown(self) -> None:
-        if self._options is not None:
-            self._options.destroy()
-        self.close()
+        with ExitStack() as cleanup:
+            cleanup.callback(self.close)
+            if self._options is not None:
+                cleanup.callback(self._options.destroy)
+            self.hide()

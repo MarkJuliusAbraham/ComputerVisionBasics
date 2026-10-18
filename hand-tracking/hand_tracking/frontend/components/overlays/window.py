@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import ExitStack
 import tkinter as tk
 
 from PIL import Image
@@ -38,6 +39,8 @@ class ClickThroughOverlayWindow:
         self._handle: int | None = None
         self._drag_offset: tuple[int, int] | None = None
         self._closed = False
+        self._destroyed = False
+        self._presenter_closed = False
         self._size = (1, 1)
         self._refresh = IdleRefresh(self.window, self.refresh, event="<<ThemeChanged>>")
         self.window.bind("<Map>", self._mapped, add="+")
@@ -87,9 +90,16 @@ class ClickThroughOverlayWindow:
             self._presenter.present(self._apply_native_style(), self._image, self.position)
 
     def show(self) -> None:
+        if self._closed:
+            return
         self.refresh()
         self.window.deiconify()
         self._present_image()
+
+    def hide(self) -> None:
+        """Remove the topmost surface before any resource cleanup can block."""
+        if not self._destroyed:
+            self.window.withdraw()
 
     def _mapped(self, event: tk.Event[tk.Misc]) -> None:
         if event.widget is self.window:
@@ -136,7 +146,20 @@ class ClickThroughOverlayWindow:
         return None
 
     def close(self) -> None:
-        if not self._closed:
-            self._closed = True
-            self._presenter.close()
-            self.window.destroy()
+        self._closed = True
+        # Remove the native window before releasing graphics resources. Keep
+        # failed resources retryable while preventing any further rendering.
+        with ExitStack() as cleanup:
+            if not self._presenter_closed:
+                cleanup.callback(self._close_presenter)
+            if not self._destroyed:
+                cleanup.callback(self._destroy_window)
+            self.hide()
+
+    def _destroy_window(self) -> None:
+        self.window.destroy()
+        self._destroyed = True
+
+    def _close_presenter(self) -> None:
+        self._presenter.close()
+        self._presenter_closed = True

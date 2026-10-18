@@ -13,14 +13,16 @@ from .repeat_commands import RepeatCommandsSection
 
 
 class GestureEditorSection(ttk.Frame):
-    def __init__(self, master, appearance, on_change=None, segment_count=4, *, on_repeat_change=None):
+    def __init__(
+        self, master, appearance, on_change=None, segment_count=4, *, on_repeat_change=None, pose_feed=None,
+    ):
         super().__init__(master)
         self.appearance = appearance
         self.layout = ScaledLayout(self, appearance)
         self.heading = self.layout.pack(GestureHeading(self, appearance), fill="x", pady=(0, 14))
         self.name = self.heading.name
         self.criteria_card = self.layout.pack(
-            GestureSection(self, appearance, on_change, segment_count), fill="x", pady=(0, 18),
+            GestureSection(self, appearance, on_change, segment_count, pose_feed=pose_feed), fill="x", pady=(0, 18),
         )
         self.tracking = self.layout.pack(
             GestureTrackingSection(self, on_change=on_change, appearance=appearance), fill="x", pady=(0, 18),

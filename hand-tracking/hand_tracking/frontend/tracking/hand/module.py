@@ -16,6 +16,7 @@ from hand_tracking.backend.settings.settings_manager import Settings
 from hand_tracking.backend.settings.overlay_settings import OverlaySettings
 
 from .debug_panel.debug_panel import HandDebugPanel
+from .live_pose_feed import LivePoseFeed
 from .mapping_panel.mapping_panel import MappingPanel
 from .overlay.hand_tracking_overlay import HandTrackingOverlay
 from .settings_panel.settings_panel import HandSettingsPanel
@@ -46,8 +47,11 @@ class HandTrackingModule:
             on_overlay_options=self.open_overlay_options,
         )
         self.settings_panel = HandSettingsPanel(on_apply=actions.apply_settings, model_asset=model_asset)
+        # Mapping views capture criteria from live poses on demand.
+        self.pose_feed = LivePoseFeed()
         self.mapping = MappingPanel(
             on_saved=actions.apply_mapping, segment_count=settings.data.finger_segment_count,
+            pose_feed=self.pose_feed,
         )
         self.window: TrackingWindow | None = None
         self.overlay: HandTrackingOverlay | None = None
@@ -118,10 +122,12 @@ class HandTrackingModule:
 
     @property
     def preview_active(self) -> bool:
-        return (
+        """Detection without commands, for the settings preview or a pose capture."""
+        settings_preview = (
             self.window is not None and self.window.preview_visible
             and self.settings_panel.tracking_preview_active
         )
+        return settings_preview or self.pose_feed.requested
 
     def _publish_report(self) -> None:
         """Show the debugging panel's current report on the desktop overlay."""
@@ -132,6 +138,7 @@ class HandTrackingModule:
         self.debug.update_gesture_display(records, enabled, paused)
         self._publish_report()
         self.settings_panel.set_preview_data(self.debug.preview_fingers, self.debug.preview_status)
+        self.pose_feed.publish(records)
 
     def set_model_status(self, status):
         self.debug.set_model_status(status)
@@ -166,9 +173,15 @@ class HandTrackingModule:
             self.overlay.refresh()
 
     def close(self) -> None:
+        try:
+            if self.overlay is not None:
+                self.overlay.shutdown()
+        finally:
+            self._debug_active = False
+            if self.window is not None:
+                self.window.close()
+                self.window = None
+
+    def hide_overlays(self) -> None:
         if self.overlay is not None:
-            self.overlay.shutdown()
-        self._debug_active = False
-        if self.window is not None:
-            self.window.close()
-            self.window = None
+            self.overlay.hide()

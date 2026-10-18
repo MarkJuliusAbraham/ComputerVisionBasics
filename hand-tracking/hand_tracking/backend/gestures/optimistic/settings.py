@@ -15,6 +15,12 @@ class OptimisticTrackingSettings:
     activation_distance: float = 0.09
     repeat_delay_ms: float = 50.0
     delay_variance_ms: float = 0.0
+    # One Euro filter on the wrist; a cutoff of 0 turns smoothing off.
+    smoothing_min_cutoff_hz: float = 1.0
+    smoothing_beta: float = 5.0
+    # Measure distances as if the palm were reference_palm_size of the frame width.
+    scale_with_hand_size: bool = False
+    reference_palm_size: float = 0.13
     movement: MovementBufferSettings = MovementBufferSettings()
 
     def __post_init__(self):
@@ -26,6 +32,13 @@ class OptimisticTrackingSettings:
             raise ValueError("Wrist lookback duration and activation distance must be greater than zero")
         validate_number(self.repeat_delay_ms, "Repeat delay")
         validate_number(self.delay_variance_ms, "Delay variance")
+        validate_number(self.smoothing_min_cutoff_hz, "Smoothing cutoff")
+        validate_number(self.smoothing_beta, "Smoothing speed response")
+        if not isinstance(self.scale_with_hand_size, bool):
+            raise ValueError("Scale with hand size must be a boolean")
+        validate_number(self.reference_palm_size, "Reference palm size")
+        if self.reference_palm_size == 0:
+            raise ValueError("Reference palm size must be greater than zero")
         if not isinstance(self.movement, MovementBufferSettings):
             raise ValueError("Optimistic movement must contain valid buffer and axis settings")
 
@@ -35,7 +48,10 @@ class OptimisticTrackingSettings:
             return value
         values = merged_fields(
             cls, value, "optimistic_tracking",
-            ("enabled", "lookback_seconds", "delay_variance_ms"),
+            (
+                "enabled", "lookback_seconds", "delay_variance_ms", "smoothing_min_cutoff_hz",
+                "smoothing_beta", "scale_with_hand_size", "reference_palm_size",
+            ),
         )
         value = value or {}
         raw_movement = value.get("movement") or {}

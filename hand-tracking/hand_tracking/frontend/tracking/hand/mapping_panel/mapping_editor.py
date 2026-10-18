@@ -17,9 +17,10 @@ class MappingEditor(ttk.Frame):
 
     def __init__(
         self, master, on_saved=None, config_path=None, segment_count=4, *,
-        session=None, form_factory=MappingForm, changes_guard=None,
+        session=None, form_factory=MappingForm, changes_guard=None, pose_feed=None,
     ):
         super().__init__(master)
+        self.pose_feed = pose_feed
         self.on_saved = on_saved
         self.session = session if session is not None else MappingSession(config_path=config_path)
         self.changes_guard = changes_guard if changes_guard is not None else UnsavedChangesGuard(self.winfo_toplevel())
@@ -41,7 +42,7 @@ class MappingEditor(ttk.Frame):
             on_save=self.save,
             on_discard=self.discard,
         )
-        self.form = form_factory(self, callbacks=callbacks, segment_count=segment_count)
+        self.form = form_factory(self, callbacks=callbacks, segment_count=segment_count, pose_feed=pose_feed)
         self.form.pack(fill="both", expand=True)
         self._refresh_form()
 
@@ -117,7 +118,7 @@ class MappingEditor(ttk.Frame):
         self._capture_draft()
         ResetGestureDialog(
             self.winfo_toplevel(), self.session.reset_draft, self.form.segment_count,
-            on_use_changes=self._stage_reset,
+            on_use_changes=self._stage_reset, pose_feed=self.pose_feed,
         ).show()
 
     def _stage_reset(self, match):

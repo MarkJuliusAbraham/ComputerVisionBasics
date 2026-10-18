@@ -86,6 +86,10 @@ class AverageDistanceAccumulator:
         self.distance = 0.0
         self._rebase_next = False
 
+    def rebase(self):
+        """Skip the next segment so an unseen movement cannot add distance."""
+        self._rebase_next = True
+
     def advance(self, segments):
         # Keep the selected group fixed. Missing samples must not change the
         # denominator or count an unobserved jump when a fingertip returns.

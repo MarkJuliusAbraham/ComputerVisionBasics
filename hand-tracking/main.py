@@ -3,6 +3,7 @@
 from contextlib import ExitStack
 
 from hand_tracking.backend.capture.camera import Camera
+from hand_tracking.backend.common.diagnostics import RuntimeDiagnostics
 from hand_tracking.backend.engine.components import FrameOverlays, HandPipeline
 from hand_tracking.backend.engine.engine import TrackingEngine
 from hand_tracking.backend.frame_overlays.debug_overlay import DebugOverlay
@@ -31,49 +32,54 @@ def open_preview(startup: ExitStack) -> CameraPreview:
     return preview
 
 
-def start_hand_pipeline(startup: ExitStack, settings: Settings, invoker: InvokerOverlay) -> HandPipeline:
+def start_hand_pipeline(startup: ExitStack, settings: Settings, *, on_command=None) -> HandPipeline:
     tracker = HandTracker(model_path=settings.data.hand_landmarker_model_path)
     startup.callback(tracker.close)
-    # Each released command key is reported to the Invoker overlay.
-    gestures = GestureHandler(invoker)
+    gestures = GestureHandler(on_command=on_command)
     startup.callback(gestures.close)
     return HandPipeline(tracker, Detector(settings.data), gestures)
 
 
-def create_frame_overlays(invoker: InvokerOverlay) -> FrameOverlays:
+def create_frame_overlays(*, command_overlay=None) -> FrameOverlays:
     landmarks = HandDrawer()
     return FrameOverlays(
         landmarks=landmarks,
         hand_status=DebugOverlay(),
         gesture_paths=GesturePathOverlay(landmarks),
-        invoker=invoker,
+        command_overlay=command_overlay,
         image=ImageOverlay(),
     )
 
 
-def build_application(settings: Settings) -> Application:
+def build_application(settings: Settings, *, heartbeat=None) -> Application:
     """Create every component; close the ones already started if one fails."""
     with ExitStack() as startup:
         camera = open_camera(startup)
         preview = open_preview(startup)
+        # Temporary Invoker feature: remove this construction and the two
+        # optional connections below to run without its element stack/display.
         invoker = InvokerOverlay()
-        pipeline = start_hand_pipeline(startup, settings, invoker)
-        engine = TrackingEngine(settings, camera, pipeline, create_frame_overlays(invoker))
-        app = Application(engine, preview)
+        pipeline = start_hand_pipeline(startup, settings, on_command=invoker.on_command)
+        engine = TrackingEngine(
+            settings, camera, pipeline, create_frame_overlays(command_overlay=invoker),
+        )
+        app = Application(engine, preview, heartbeat=heartbeat)
         startup.pop_all()  # Application owns cleanup after construction.
     return app
 
 
 def main():
     enable_dpi_awareness()
-    settings = Settings()
-    while True:
-        settings.load()
-        app = build_application(settings)
-        app.run()
+    with RuntimeDiagnostics() as diagnostics:
+        settings = Settings()
+        while True:
+            diagnostics.heartbeat()
+            settings.load()
+            app = build_application(settings, heartbeat=diagnostics.heartbeat)
+            app.run()
 
-        if not app.restart_requested:
-            break
+            if not app.restart_requested:
+                break
 
 
 if __name__ == "__main__":

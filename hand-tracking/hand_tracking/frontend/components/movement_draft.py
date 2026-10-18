@@ -59,6 +59,9 @@ class MovementSettingsDraft:
     y: str
     z: str
     min_interval_seconds: float
+    trigger: str = "tracking"
+    shake_amplitude: str = "35"
+    shake_window_ms: str = "450"
 
     @classmethod
     def defaults(cls):
@@ -70,6 +73,9 @@ class MovementSettingsDraft:
             distance=percent_text(settings.distance_threshold),
             limit=str(settings.max_repeats),
             min_interval_seconds=settings.min_interval_seconds,
+            trigger=settings.trigger,
+            shake_amplitude=percent_text(settings.shake_amplitude),
+            shake_window_ms=number_text(settings.shake_window_seconds * 1000),
             **buffer_texts(settings.movement),
         )
 
@@ -84,6 +90,13 @@ class MovementSettingsDraft:
             "Repeat distances, buffer credit, and axis weights must be numbers",
         )
         return RepeatSettings(
+            trigger=self.trigger,
+            shake_amplitude=parse_numbers(
+                {"stroke": self.shake_amplitude}, "Shake stroke must be a number",
+            )["stroke"] / 100,
+            shake_window_seconds=parse_numbers(
+                {"window": self.shake_window_ms}, "Shake time window must be a number",
+            )["window"] / 1000,
             distance_threshold=numbers["distance"] / 100,
             max_repeats=limit,
             min_interval_seconds=self.min_interval_seconds,

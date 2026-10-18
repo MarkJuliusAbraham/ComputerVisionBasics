@@ -37,7 +37,7 @@ flowchart TD
     Results --> Poll["HandTracker.detect<br/>Return the latest completed result"]:::component
     Session --> Poll
     Poll --> Detector["Detector<br/>FingerClassifier + PalmDetector"]:::component
-    Detector --> State[/"GestureState<br/>Palm, finger deviations/classes/tips, wrist"/]:::data
+    Detector --> State[/"GestureState<br/>Palm, finger deviations/classes/tips, wrist, palm size"/]:::data
 
     State --> Handler["GestureHandler<br/>Reset rule, matching, input latch,<br/>fingertip tracking and repeats"]:::component
     Handler --> Definition[/"GestureDefinition or none<br/>Matched gesture for reporting"/]:::data
@@ -116,7 +116,7 @@ flowchart TD
 ```mermaid
 %%{init: {"theme": "base", "htmlLabels": false, "flowchart": {"htmlLabels": false}, "themeCSS": ".edgeLabel rect, .labelBkg { fill: #ffffff !important; opacity: 1 !important; }", "themeVariables": {"primaryTextColor": "#202020", "textColor": "#202020", "lineColor": "#8a8a8a", "edgeLabelBackground": "#ffffff", "clusterBkg": "#f7f7f7", "clusterBorder": "#808080", "titleColor": "#202020", "background": "#ffffff"}}}%%
 flowchart TD
-    State[/"GestureState"/]:::data --> Wrist["WristMovementHistory<br/>Record motion within the lookback window"]:::component
+    State[/"GestureState"/]:::data --> Wrist["WristMovementHistory<br/>Once per detection: One Euro smoothing,<br/>optional hand-size scaling; keep the lookback window"]:::component
     Wrist --> Reset{"Matches profile reset rule?"}:::decision
     Reset -->|Yes| Clear["GestureHandler<br/>Clear commands, repeats and drawings;<br/>unlock input when invocation is enabled"]:::component
     Reset -->|No| Match["GestureMatcher<br/>Search valid profile definitions"]:::component
@@ -143,6 +143,16 @@ flowchart TD
     classDef decision fill:#d1e7f7,stroke:#0078d4,color:#202020,stroke-width:2px;
     classDef data fill:#f1ecdc,stroke:#76601f,color:#202020,stroke-width:2px;
 ```
+
+Optimistic tracking measures the wrist the same way fingertip repeats are
+measured (starting buffer, then weighted path length), with two additions.
+Each new detection is smoothed with a One Euro filter
+(`hand_tracking/backend/gestures/optimistic/smoothing.py`); the frame loop
+sees each cached landmark result many times, so repeats of the same result
+are ignored. When "Scale distances with hand size" is on, each movement is
+multiplied by the reference palm size divided by the current smoothed palm
+size (`palm_size` in `geometry.py`), so thresholds behave the same at any
+distance from the camera.
 
 The matcher compares the palm rule and each configured finger's allowed
 classification values. Identical conflicting criteria are excluded by
@@ -184,6 +194,18 @@ flowchart LR
     classDef config fill:#ece6f0,stroke:#67437d,color:#202020,stroke-width:2px;
     classDef external fill:#e2e2e2,stroke:#606060,color:#202020,stroke-width:2px;
 ```
+
+Hand criteria (for a gesture or the universal reset) can be typed in with the
+dropdowns or checklist, or captured: "Capture from hand" counts down, then
+subscribes to `LivePoseFeed` for 1.5 s. While it is subscribed,
+`HandTrackingModule.preview_active` requests detection without commands.
+`PoseCapture` (backend) turns the first hand's reports into a `GestureMatch`.
+Each finger takes the band it held in most frames. If that band is Straight or
+Closed, the chosen allowance (none, 1 or 2 bands, default 1) also accepts the
+neighbouring bands toward the middle, so a pointed finger also matches when
+only partially up; middle bands stay exact. The palm is constrained only if at
+least 80% of frames agreed. The
+result lands in the draft like any other edit, so Save or Discard still decides.
 
 Mapping drafts and settings drafts have separate commit operations. The
 settings deviation preview evaluates draft thresholds without committing them
@@ -235,4 +257,5 @@ reverse. The folders inside it are namespace packages, so they have no
 | Shared hand UI report and views | `hand_tracking/frontend/tracking/hand/module.py`, `hand_tracking/frontend/tracking/hand/debug_panel/` |
 | Desktop overlay | `hand_tracking/frontend/tracking/hand/overlay/`, `hand_tracking/frontend/components/overlays/` |
 | Camera-frame drawings and preview window | `hand_tracking/backend/frame_overlays/`, `hand_tracking/frontend/camera_preview.py` |
+| Capturing hand criteria from a held pose | `hand_tracking/backend/gestures/pose_capture.py`, `hand_tracking/frontend/tracking/hand/live_pose_feed.py`, `hand_tracking/frontend/tracking/hand/mapping_panel/sections/pose_capture_control.py` |
 | Settings and gesture-profile persistence | `hand_tracking/backend/settings/settings_manager.py`, `hand_tracking/backend/gestures/gesture_config.py`, `hand_tracking/backend/gestures/profile_manager.py`, `hand_tracking/backend/common/json_storage.py`, `hand_tracking/backend/common/config_values.py` |

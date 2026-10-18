@@ -97,7 +97,8 @@ class TrackingEngine:
         """Reset the hand pipeline without reopening the shared camera."""
         self.pipeline.restart(self.settings.data.hand_landmarker_model_path)
         self.switches.paused = False
-        self.overlays.invoker.reset()
+        if self.overlays.command_overlay is not None:
+            self.overlays.command_overlay.reset()
 
     def toggle_pause(self) -> bool:
         """Pause or resume tracking; returns whether tracking is now paused."""
@@ -121,6 +122,7 @@ class TrackingEngine:
         pipeline, overlays, switches = self.pipeline, self.overlays, self.switches
         model_status = pipeline.tracker.model_status
         if model_status != self._model_status:
+            pipeline.detector.reset()
             pipeline.gestures.suspend()
             self._model_status = model_status
         can_track = switches.can_track(model_status)
@@ -132,6 +134,7 @@ class TrackingEngine:
         with self.frame_profiler.measure("camera.read_copy"):
             frame = self.camera.read()
         if frame is None:
+            pipeline.detector.reset()
             # A failed device should leave the controls available for choosing
             # another camera rather than terminating the whole application.
             pipeline.gestures.finish_frame(set())
@@ -151,6 +154,7 @@ class TrackingEngine:
                 )
                 overlays.draw_hand_status(frame, hand_reports)
         else:
+            pipeline.detector.reset()
             with self.frame_profiler.measure("frame.flip"):
                 cv2.flip(frame, 1, dst=frame)
 
@@ -158,7 +162,8 @@ class TrackingEngine:
             overlays.gesture_paths.draw(frame, pipeline.gestures.drawing_paths)
         # Once per frame, even when no hands are visible
         with self.frame_profiler.measure("overlay.compose"):
-            frame = overlays.invoker.handleDisplay(frame)
+            if overlays.command_overlay is not None:
+                frame = overlays.command_overlay.draw(frame)
         return FrameResult(camera_status, model_status, hand_reports, frame)
 
     def finish_frame(self) -> None:

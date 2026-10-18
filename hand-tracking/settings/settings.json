@@ -1,7 +1,14 @@
 {
+  "one_euro_enabled": true,
+  "one_euro_min_cutoff_hz": 40.0,
+  "one_euro_beta": 2.0,
+  "finger_hysteresis_enabled": true,
+  "finger_hysteresis_margin_degrees": 3.0,
+  "finger_settling_enabled": true,
+  "finger_settling_max_speed": 180.0,
   "track_hands": true,
   "profile": true,
-  "theme": "Nier Light",
+  "theme": "Nier Dark",
   "ui_scale": "150%",
   "finger_segment_count": 6,
   "finger_classification_thresholds": [
@@ -19,6 +26,10 @@
     "activation_distance": 0.09,
     "repeat_delay_ms": 50.0,
     "delay_variance_ms": 0.0,
+    "smoothing_min_cutoff_hz": 1.0,
+    "smoothing_beta": 5.0,
+    "scale_with_hand_size": false,
+    "reference_palm_size": 0.13,
     "movement": {
       "initial_displacement": 0.03,
       "buffer_credit": 0.0,
@@ -31,7 +42,7 @@
   },
   "hand_overlay": {
     "style": "Simple",
-    "background_opacity": 0.01,
+    "background_opacity": 0.56,
     "position": {
       "x": 17,
       "y": 15

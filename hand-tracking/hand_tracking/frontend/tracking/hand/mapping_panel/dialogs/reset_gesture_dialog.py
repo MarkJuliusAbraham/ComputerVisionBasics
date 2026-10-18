@@ -10,11 +10,12 @@ from ..sections.reset_gesture import ResetGestureSection
 
 
 class ResetGestureDialog:
-    def __init__(self, parent, match, segment_count, on_use_changes):
+    def __init__(self, parent, match, segment_count, on_use_changes, *, pose_feed=None):
         self.parent = parent
         self.match = match
         self.segment_count = segment_count
         self.on_use_changes = on_use_changes
+        self.pose_feed = pose_feed
 
     def show(self):
         self.modal = ModalDialog(self.parent, "Edit universal reset", base_size=(900, 700))
@@ -32,7 +33,9 @@ class ResetGestureDialog:
         )
         scroll = ScrollableFrame(self.window)
         scroll.pack(fill="both", expand=True, padx=appearance.pixels(16), pady=(appearance.pixels(16), 0))
-        self.section = ResetGestureSection(scroll.content, segment_count=self.segment_count)
+        self.section = ResetGestureSection(
+            scroll.content, segment_count=self.segment_count, pose_feed=self.pose_feed,
+        )
         self.section.pack(fill="x")
         self.section.load(self.match)
         self.modal.show(scale=appearance.scale)

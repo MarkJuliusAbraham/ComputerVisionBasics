@@ -11,6 +11,7 @@ from hand_tracking.backend.settings.settings_manager import (
     SettingsScope,
 )
 from hand_tracking.frontend.components.commit_actions import CommitActions
+from hand_tracking.frontend.components.scrollable_frame import ScrollableFrame
 from hand_tracking.frontend.core.callbacks import ApplySettingsCallback, SettingsPathCallback
 
 from .settings_form import SettingsForm
@@ -42,8 +43,9 @@ class SettingsPanel:
             content, on_save=self.apply, on_discard=self.discard, save_label="Apply",
         )
         footer.pack(side="bottom", fill="x", padx=12, pady=12)
+        self.scroll = ScrollableFrame(content)
         self.form = self.form_factory(
-            content, settings=settings, on_change=self._refresh_apply_state,
+            self.scroll.content, settings=settings, on_change=self._refresh_apply_state,
             on_settings_path=self.on_settings_path,
         )
         footer.message.use_variable(self.form.status_var)
@@ -51,6 +53,7 @@ class SettingsPanel:
             side="bottom", fill="x", padx=12,
         )
         self.form.pack(fill="both", expand=True, padx=12, pady=(12, 0))
+        self.scroll.pack(fill="both", expand=True)
         self.show_settings(settings)
         return self.form
 

@@ -1,4 +1,6 @@
 import time
+import logging
+from collections.abc import Callable
 from contextlib import ExitStack
 from dataclasses import dataclass
 
@@ -11,6 +13,8 @@ from hand_tracking.frontend.main_panel.main_panel import MainPanel
 from hand_tracking.frontend.settings_panel.settings_panel import SettingsPanel
 from hand_tracking.frontend.tracking.registry import TrackingWindowRegistry
 from hand_tracking.frontend.tracking.hand.module import HandTrackingActions, HandTrackingModule
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -39,9 +43,15 @@ class DisplayThrottle:
 class Application:
     """Runs the control windows and displays what the tracking engine produces."""
 
-    def __init__(self, engine: TrackingEngine, preview: CameraPreview):
+    def __init__(
+        self, engine: TrackingEngine, preview: CameraPreview, *,
+        heartbeat: Callable[[], None] | None = None,
+    ):
         self.engine = engine
         self.preview = preview
+        self._heartbeat = heartbeat
+        self._closed = False
+        self._failed = False
         settings = engine.settings
 
         self.running = True
@@ -119,6 +129,14 @@ class Application:
 
     def request_quit(self) -> None:
         self.running = False
+        try:
+            self.gui.hide_overlays()
+        except Exception:
+            logger.exception("Could not hide overlays while quitting")
+        try:
+            self.engine.set_commands_active(False)
+        except Exception:
+            logger.exception("Could not cancel gesture commands while quitting")
         self.gui.quit()
 
     def toggle_tracking(self) -> None:
@@ -137,6 +155,7 @@ class Application:
 
     def run(self):
         try:
+            self._poll_ui_heartbeat()
             self.gui.after(0, self._process_frame)
             self.gui.run()
         except KeyboardInterrupt:
@@ -144,15 +163,50 @@ class Application:
         finally:
             self.close()
 
+    def _poll_ui_heartbeat(self) -> None:
+        """Measure UI responsiveness, including time spent in a modal error dialog."""
+        if not self._closed and self._heartbeat is not None:
+            self._heartbeat()
+            self.gui.after(1000, self._poll_ui_heartbeat)
+
     def _process_frame(self):
         """Process one frame, then yield to the control window's event loop."""
         if not self.running:
             return
 
         try:
-            self._process_frame_work()
+            try:
+                delay_ms = self._process_frame_work()
+            finally:
+                self.engine.finish_frame()
+            if self.running:
+                self.gui.after(delay_ms, self._process_frame)
+        except KeyboardInterrupt:
+            self.request_quit()
+        except Exception as error:
+            self._stop_on_failure(error)
+
+    def _stop_on_failure(self, error: Exception) -> None:
+        """Stop commands and remove topmost surfaces before reporting a fatal frame error."""
+        if self._failed:
+            return
+        self._failed = True
+        self.running = False
+        for description, action in (
+            ("hide overlays", self.gui.hide_overlays),
+            ("stop gesture commands", lambda: self.engine.set_commands_active(False)),
+        ):
+            try:
+                action()
+            except Exception:
+                logger.exception("Could not %s after frame failure", description)
+        logger.error("Frame processing failed", exc_info=(type(error), error, error.__traceback__))
+        try:
+            self.gui.show_failure(str(error) or type(error).__name__)
+        except Exception:
+            logger.exception("Could not display the processing failure")
         finally:
-            self.engine.finish_frame()
+            self.gui.quit()
 
     def _process_frame_work(self):
         result = self.engine.process_frame(preview_requested=self.hand_tracking.preview_active)
@@ -161,11 +215,10 @@ class Application:
         self._refresh_gesture_display()
 
         if result.frame is None:
-            self.gui.after(10, self._process_frame)
-            return
+            return 10
         with self.engine.frame_profiler.measure("preview.submit"):
             self.preview.show(result.frame)
-        self.gui.after(1, self._process_frame)
+        return 1
 
     def _show_statuses(self, result: FrameResult) -> None:
         """Update the model and camera status displays when they change."""
@@ -202,9 +255,15 @@ class Application:
 
     def close(self):
         self.running = False
-        # Run every cleanup even if an earlier one raises; the last registered
-        # runs first: input, inference and the camera, then the windows.
+        if self._closed:
+            return
+        self._closed = True
+        # Hide topmost surfaces before any native worker can delay shutdown.
+        # ExitStack still attempts every cleanup when an earlier one raises.
         with ExitStack() as cleanup:
             cleanup.callback(self.preview.close)
             cleanup.callback(self.gui.close)
             cleanup.callback(self.engine.close)
+            cleanup.callback(logger.info, "Application shutdown started")
+            cleanup.callback(self.gui.hide_overlays)
+        logger.info("Application shutdown finished")

@@ -1,6 +1,7 @@
 """Window registration and coordination without tracker-specific UI logic."""
 
 from collections.abc import Iterable
+from contextlib import ExitStack
 import tkinter as tk
 
 from .module import TrackingModule
@@ -27,5 +28,12 @@ class TrackingWindowRegistry:
             module.resize(scale)
 
     def close(self) -> None:
-        for module in self.modules.values():
-            module.close()
+        with ExitStack() as cleanup:
+            for module in reversed(tuple(self.modules.values())):
+                cleanup.callback(module.close)
+            self.hide_overlays()
+
+    def hide_overlays(self) -> None:
+        with ExitStack() as cleanup:
+            for module in reversed(tuple(self.modules.values())):
+                cleanup.callback(module.hide_overlays)

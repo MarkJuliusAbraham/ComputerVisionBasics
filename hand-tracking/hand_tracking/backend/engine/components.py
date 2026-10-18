@@ -9,12 +9,11 @@ from __future__ import annotations
 
 from contextlib import ExitStack
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 from hand_tracking.backend.gestures.hand_report import HandReport
 
 if TYPE_CHECKING:
-    from hand_tracking.backend.frame_overlays.invoker_overlay import InvokerOverlay
     from hand_tracking.backend.frame_overlays.debug_overlay import DebugOverlay
     from hand_tracking.backend.gestures.gesture_handler import GestureHandler
     from hand_tracking.backend.frame_overlays.gesture_path_overlay import GesturePathOverlay
@@ -35,13 +34,16 @@ class HandPipeline:
 
     def apply_settings(self, data: SettingsData) -> None:
         """Use the current detection, model, and optimistic-tracking settings."""
+        self.tracker.configure_filter(data)
         self.detector.configure(data)
         self.gestures.configure_optimistic(data.optimistic_tracking)
+        self.gestures.configure_settling(data)
         self.tracker.request_model(data.hand_landmarker_model_path)
 
     def restart(self, model_path: str) -> None:
         """Reload the model and clear gesture input, keeping the current mapping."""
         self.tracker.request_model(model_path, force=True)
+        self.detector.reset()
         self.gestures.configure(self.gestures.config)
 
     def analyze(self, frame, tracking, *, invoke_commands: bool) -> list[HandReport]:
@@ -54,8 +56,11 @@ class HandPipeline:
             state = self.detector.update(hand, hand_name, aspect)
             gesture = self.gestures.handle(
                 state, hand_name, frame_size=(width, height), invoke_commands=invoke_commands,
+                sample_time=getattr(tracking, "timestamp_ms", None) / 1000
+                if getattr(tracking, "timestamp_ms", None) is not None else None,
             )
             reports.append(HandReport(hand_name, state, gesture))
+        self.detector.finish_frame({report.handedness for report in reports})
         self.gestures.finish_frame(
             {report.handedness for report in reports}, invoke_commands=invoke_commands,
         )
@@ -68,6 +73,14 @@ class HandPipeline:
             cleanup.callback(self.gestures.close)
 
 
+class CommandOverlay(Protocol):
+    """Optional stateful drawing driven by completed commands."""
+
+    def draw(self, frame): ...
+
+    def reset(self) -> None: ...
+
+
 @dataclass(frozen=True)
 class FrameOverlays:
     """Everything drawn onto the camera frame."""
@@ -75,7 +88,7 @@ class FrameOverlays:
     landmarks: HandDrawer
     hand_status: DebugOverlay
     gesture_paths: GesturePathOverlay
-    invoker: InvokerOverlay
+    command_overlay: CommandOverlay | None = None
     # Built at startup but never drawn; see docs/dead_code_checklist.md.
     image: ImageOverlay | None = None
 

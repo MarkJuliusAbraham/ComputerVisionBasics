@@ -8,7 +8,7 @@ from .hand_criteria import HandCriteriaSection
 class ResetGestureSection(ttk.LabelFrame):
     """A reset has hand criteria and a built-in action, with no command sequence."""
 
-    def __init__(self, master, on_change=None, segment_count=4):
+    def __init__(self, master, on_change=None, segment_count=4, *, pose_feed=None):
         super().__init__(master, text="Universal reset", padding=16)
         ttk.Label(
             self,
@@ -21,7 +21,7 @@ class ResetGestureSection(ttk.LabelFrame):
             wraplength=650,
         ).pack(anchor="w", pady=(6, 12))
         self.criteria = HandCriteriaSection(
-            self, on_change=on_change, segment_count=segment_count,
+            self, on_change=on_change, segment_count=segment_count, pose_feed=pose_feed,
         )
         self.criteria.pack(fill="x")
 

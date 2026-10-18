@@ -163,6 +163,10 @@ class OverlayOptionsDialog:
             self.destroy()
 
     def destroy(self) -> None:
-        self._set_repositioning(False)
-        self.window.destroy()
-        self._on_close()
+        try:
+            self._set_repositioning(False)
+        finally:
+            try:
+                self.window.destroy()
+            finally:
+                self._on_close()

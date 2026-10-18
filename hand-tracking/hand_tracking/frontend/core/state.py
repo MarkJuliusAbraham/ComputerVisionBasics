@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Callable, Generic, TypeVar
 from hand_tracking.backend.settings.settings_manager import Settings
 from hand_tracking.frontend.components.guarded_notebook import GuardedNotebook
 
-from .callbacks import Action, ApplySettingsCallback, ExceptionReporter, SettingsPathCallback
+from .callbacks import Action, ApplySettingsCallback, SettingsPathCallback
 from .panel_contracts import MainPanelContract, MappingPanelContract, PanelCollection, SettingsPanelContract
 
 if TYPE_CHECKING:
@@ -93,4 +93,3 @@ class WindowView:
     settings_tab: ttk.Frame
     mapping_tab: ttk.Frame | None = None
     current_tab: str | None = None
-    default_callback_exception: ExceptionReporter | None = None

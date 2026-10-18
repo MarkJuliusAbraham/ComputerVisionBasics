@@ -1,4 +1,5 @@
 import threading
+import logging
 
 import cv2
 
@@ -164,3 +165,5 @@ class Camera:
         self._wake.set()
         if self._worker.is_alive():
             self._worker.join(timeout=2)
+            if self._worker.is_alive():
+                logging.getLogger(__name__).warning("Camera capture did not stop within 2 seconds")

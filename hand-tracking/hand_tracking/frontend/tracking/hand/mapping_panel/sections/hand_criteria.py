@@ -10,15 +10,22 @@ from hand_tracking.frontend.core.scaled_layout import ScaledLayout
 
 from .criteria_options import PALM_OPTIONS
 
-PALM_LABELS = {value: label for label, value in PALM_OPTIONS.items()}
 from .finger_criteria.editor import FingerCriteriaEditor
+from .pose_capture_control import PoseCaptureControl
+
+PALM_LABELS = {value: label for label, value in PALM_OPTIONS.items()}
 
 
 class HandCriteriaSection(ttk.Frame):
-    """Group hand criteria under a heading, exposing one GestureMatch value."""
+    """Group hand criteria under a heading, exposing one GestureMatch value.
+
+    With a ``pose_feed`` (LivePoseFeed), the criteria can also be captured
+    from a pose held in front of the camera.
+    """
 
     def __init__(
         self, master, on_change=None, appearance=None, segment_count=4, show_heading=True,
+        pose_feed=None,
     ):
         super().__init__(master)
         self.appearance = appearance or ThemeMetrics(self)
@@ -34,7 +41,14 @@ class HandCriteriaSection(ttk.Frame):
         self.mode_button = ttk.Button(
             self.header, text="Use checklist", width=18, command=self._toggle_mode,
         )
-        self.mode_button.grid(row=0, column=1, sticky="e")
+        self.mode_button.grid(row=0, column=3, sticky="e")
+        self.capture = None
+        if pose_feed is not None:
+            self.capture = PoseCaptureControl(
+                self, self.header, pose_feed, lambda: self.fingers.segment_count, self._captured,
+            )
+            self.layout.grid(self.capture.allowance_selector, row=0, column=1, sticky="e", padx=(0, 8))
+            self.layout.grid(self.capture.button, row=0, column=2, sticky="e", padx=(0, 8))
 
         self.palm_row = self.layout.grid(ttk.Frame(self), row=1, column=0, sticky="ew", pady=(0, 12))
         self.palm_row.columnconfigure(1, weight=1)
@@ -61,6 +75,10 @@ class HandCriteriaSection(ttk.Frame):
         self.availability_hint = self.layout.grid(ttk.Label(
             self, textvariable=self.fingers.availability_message, width=1, anchor="w",
         ), row=4, column=0, sticky="ew", pady=(6, 0))
+        if self.capture is not None:
+            self.layout.grid(ttk.Label(
+                self, textvariable=self.capture.status, width=1, anchor="w",
+            ), row=5, column=0, sticky="ew", pady=(6, 0))
         self.changes.watch(self.palm)
         self._size_label_column()
 
@@ -81,6 +99,10 @@ class HandCriteriaSection(ttk.Frame):
         with self.changes.suspended():
             self.palm.set(PALM_LABELS[match.palm])
             self.fingers.load(match.fingers)
+
+    def _captured(self, match):
+        self.load(match)
+        self.changes.emit()
 
     def _toggle_mode(self):
         self.fingers.toggle_mode()

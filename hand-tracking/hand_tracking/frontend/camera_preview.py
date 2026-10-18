@@ -1,6 +1,7 @@
 """Keep the Windows OpenCV event loop separate from Tk's event thread."""
 
 import threading
+import logging
 
 import cv2
 
@@ -94,3 +95,5 @@ class CameraPreview:
         self._stopping.set()
         self._wake.set()
         self._worker.join(timeout=2)
+        if self._worker.is_alive():
+            logging.getLogger(__name__).warning("Camera preview did not stop within 2 seconds")

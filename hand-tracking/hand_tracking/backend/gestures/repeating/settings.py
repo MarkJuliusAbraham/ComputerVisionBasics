@@ -64,8 +64,15 @@ class RepeatSettings:
     min_interval_seconds: float = 0.05
     max_repeats: int = 2
     movement: MovementBufferSettings = MovementBufferSettings()
+    trigger: str = "tracking"
+    shake_amplitude: float = 0.35  # Total travel per shake, in palm widths
+    shake_window_seconds: float = 0.45
 
     def __post_init__(self):
+        if self.trigger not in ("tracking", "distance", "shake"):
+            raise ValueError("Repeat trigger must be tracking, distance, or shake")
+        validate_number(self.shake_amplitude, "Shake travel", minimum=0.01)
+        validate_number(self.shake_window_seconds, "Shake time window", minimum=0.01)
         if not isinstance(self.movement, MovementBufferSettings):
             raise ValueError("Repeat movement must contain valid buffer and axis settings")
         validate_number(self.distance_threshold, "Distance per repeat")
@@ -73,13 +80,16 @@ class RepeatSettings:
             raise ValueError("Distance per repeat must be greater than zero")
         validate_number(self.min_interval_seconds, "Repeat interval")
         validate_whole_number(self.max_repeats, "Repeat limit must be a non-negative whole number")
-        if self.max_repeats and not self.movement.axis_weights.any_positive:
+        if self.trigger in ("tracking", "distance") and self.max_repeats and not self.movement.axis_weights.any_positive:
             raise ValueError("At least one axis weight must be greater than zero")
 
     def to_dict(self):
         # Profiles store the buffer fields alongside the repeat fields.
         movement = self.movement.to_dict()
         return {
+            "trigger": self.trigger,
+            "shake_amplitude": self.shake_amplitude,
+            "shake_window_seconds": self.shake_window_seconds,
             "initial_displacement": movement["initial_displacement"],
             "distance_threshold": self.distance_threshold,
             "min_interval_seconds": self.min_interval_seconds,
@@ -92,6 +102,9 @@ class RepeatSettings:
     def from_dict(cls, value):
         label = "repeat_settings"
         values = merged_fields(
-            cls, value, label, ("distance_threshold", "min_interval_seconds", "max_repeats"),
+            cls, value, label, (
+                "distance_threshold", "min_interval_seconds", "max_repeats",
+                "trigger", "shake_amplitude", "shake_window_seconds",
+            ),
         )
         return cls(**values, movement=MovementBufferSettings.from_dict(value, label))

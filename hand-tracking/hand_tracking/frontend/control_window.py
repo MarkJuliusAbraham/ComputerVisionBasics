@@ -1,7 +1,10 @@
 """Application hub hosting shared settings and independent tracking windows."""
 
 import tkinter as tk
+import logging
+from contextlib import ExitStack
 from collections.abc import Callable
+from tkinter import messagebox
 from types import TracebackType
 from hand_tracking.backend.settings.settings_manager import SettingsData
 
@@ -17,19 +20,21 @@ class ControlWindow:
         self._on_quit = context.callbacks.on_close
         context.callbacks.on_close = self._close_hub
         self._display = None
-        root = tk.Tk()
-        root.withdraw()
-        self.shell = WindowShell(
-            root, context, title="Tracking hub", main_title="Main", base_size=(860, 720),
-        )
-        self.shell.view.default_callback_exception = root.report_callback_exception
-        root.report_callback_exception = self._report_callback_exception
-        context.tracking_modules.attach(root)
-        self.apply_display(context.settings.data)
-        self.shell.build()
-        self.interactions = InputInteractionController(root)
-        self.interactions.bind()
-        root.deiconify()
+        with ExitStack() as startup:
+            root = tk.Tk()
+            startup.callback(root.destroy)
+            root.withdraw()
+            self.shell = WindowShell(
+                root, context, title="Tracking hub", main_title="Main", base_size=(860, 720),
+            )
+            root.report_callback_exception = self._report_callback_exception
+            context.tracking_modules.attach(root)
+            self.apply_display(context.settings.data)
+            self.shell.build()
+            self.interactions = InputInteractionController(root)
+            self.interactions.bind()
+            root.deiconify()
+            startup.pop_all()
 
     def apply_display(self, data: SettingsData) -> None:
         root = self.shell.view.root
@@ -56,9 +61,14 @@ class ControlWindow:
         if issubclass(exception, KeyboardInterrupt):
             self._on_quit()
         else:
-            reporter = self.shell.view.default_callback_exception
-            assert reporter is not None
-            reporter(exception, value, traceback)
+            self._on_quit()
+            logging.getLogger(__name__).error(
+                "Unhandled window callback exception", exc_info=(exception, value, traceback),
+            )
+            try:
+                self.show_failure(str(value) or exception.__name__)
+            except Exception:
+                logging.getLogger(__name__).exception("Could not display the callback failure")
 
     def after(self, delay_ms: int, callback: Callable[[], None]) -> str:
         return self.shell.view.root.after(delay_ms, callback)
@@ -70,5 +80,18 @@ class ControlWindow:
         self.shell.view.root.quit()
 
     def close(self) -> None:
-        self.context.tracking_modules.close()
-        self.shell.view.root.destroy()
+        try:
+            self.context.tracking_modules.close()
+        finally:
+            self.shell.view.root.destroy()
+
+    def hide_overlays(self) -> None:
+        self.context.tracking_modules.hide_overlays()
+
+    def show_failure(self, error_message: str) -> None:
+        messagebox.showerror(
+            "Tracking stopped",
+            f"{error_message}\n\nThe application will close. "
+            "See logs/application.log for details.",
+            parent=self.shell.view.root,
+        )
