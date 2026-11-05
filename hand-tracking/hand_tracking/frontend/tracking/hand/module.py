@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import tkinter as tk
 from tkinter import messagebox
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Callable
 
 from hand_tracking.backend.gestures.gesture_config import GestureConfig
@@ -48,7 +48,11 @@ class HandTrackingModule:
         self.debug = HandDebugPanel(
             on_open_settings=self.open_settings, on_toggle_overlay=self.toggle_overlay,
             on_overlay_options=self.open_overlay_options,
+            on_overlay_content=lambda content: self._set_overlay_choice(content=content),
+            on_overlay_size=lambda size: self._set_overlay_choice(size=size),
         )
+        overlay = settings.data.hand_overlay
+        self.debug.set_overlay_choices(overlay.content, overlay.size)
         self.settings_panel = HandSettingsPanel(on_apply=actions.apply_settings, model_asset=model_asset)
         # Mapping views capture criteria from live poses on demand.
         self.pose_feed = LivePoseFeed()
@@ -101,7 +105,27 @@ class HandTrackingModule:
         self.settings_panel.rebase(self.settings, ("hand_overlay",))
 
     def _notify_activity(self) -> None:
+        # Commands run only while a view shows what the tracker is doing.
         self.actions.activity_changed(self._debug_active or self.overlay_active)
+
+    def _set_overlay_choice(self, **changes) -> None:
+        """The workspace's overlay content and size choices apply and save at once."""
+        if self.overlay is not None:
+            self.overlay.set_content(**changes)
+        else:
+            self.save_overlay_preferences(replace(self.settings.data.hand_overlay, **changes))
+
+    @property
+    def shows_camera(self) -> bool:
+        """The overlay shows the camera, so the separate preview window can step aside."""
+        return self.overlay is not None and self.overlay.shows_camera
+
+    def show_frame(self, frame) -> None:
+        if self.overlay is not None:
+            self.overlay.show_frame(frame)
+
+    def set_tracking_paused(self, paused: bool) -> None:
+        self.debug.set_tracking_paused(paused)
 
     def toggle_overlay(self) -> None:
         if self.overlay is None:

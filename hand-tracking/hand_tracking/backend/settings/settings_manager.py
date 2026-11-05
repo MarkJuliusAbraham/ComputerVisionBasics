@@ -208,12 +208,24 @@ HAND_SETTINGS_SCOPE = SettingsScope("Hand tracking", (
 ), validator=_validate_hand_settings)
 
 
-class Settings:
-    """Owns the settings file and its current SettingsData."""
+# Settings files from before per-platform UI scales were written on Windows.
+LEGACY_UI_SCALE_PLATFORM = "Windows"
 
-    def __init__(self, path=DEFAULT_PATH):
+
+class Settings:
+    """Owns the settings file and its current SettingsData.
+
+    UI scale depends on the screen, so the file keeps one value per operating
+    system (``ui_scales``) and ``data.ui_scale`` holds the one for
+    ``platform_key``. A 150% chosen for a Windows laptop then never makes macOS
+    windows, which Tk already sizes in points, 1.5 times too large.
+    """
+
+    def __init__(self, path=DEFAULT_PATH, *, platform_key="Default"):
         self.path = path
+        self.platform_key = platform_key
         self.data = SettingsData()
+        self._ui_scales = {}
         self.load()
 
     @staticmethod
@@ -228,6 +240,7 @@ class Settings:
 
     def load(self):
         self.data = SettingsData()
+        self._ui_scales = {}
         if not os.path.exists(self.path):
             self.save()
             print(f"Created settings file: {self.path}")
@@ -241,6 +254,8 @@ class Settings:
         if isinstance(loaded, dict):
             # from_dict normalizes choices and thresholds to valid values.
             self.data = SettingsData.from_dict(loaded)
+            self._ui_scales = self._saved_ui_scales(loaded)
+            self.data.ui_scale = self._ui_scales.get(self.platform_key, SettingsData().ui_scale)
 
     def get(self, key):
         return getattr(self.data, key, None)
@@ -279,7 +294,19 @@ class Settings:
         self.update(replace(self.data, **deepcopy(values)))
         return self.data
 
+    @staticmethod
+    def _saved_ui_scales(loaded):
+        scales = loaded.get("ui_scales")
+        if not isinstance(scales, dict):
+            legacy = loaded.get("ui_scale")
+            scales = {LEGACY_UI_SCALE_PLATFORM: legacy} if legacy is not None else {}
+        return {
+            str(platform): scale for platform, scale in scales.items() if scale in UI_SCALES
+        }
+
     def save(self):
         values = self.data.to_dict()
+        self._ui_scales[self.platform_key] = values.pop("ui_scale")
+        values["ui_scales"] = dict(self._ui_scales)
         values["hand_landmarker_model_path"] = portable_path(values["hand_landmarker_model_path"])
         write_json_atomic(self.path, values, trailing_newline=False)

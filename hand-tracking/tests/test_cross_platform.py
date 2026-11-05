@@ -20,7 +20,8 @@ from hand_tracking.backend.gestures.gesture_config import DEFAULT_GESTURE_CONFIG
 from hand_tracking.backend.gestures.profile_manager import GestureProfileManager
 from hand_tracking.backend.landmarker.model_asset import DEFAULT_MODEL_PATH
 from hand_tracking.backend.settings.settings_manager import Settings
-from hand_tracking.frontend.platforms.base import MacPlatform, Platform
+from hand_tracking.frontend.platforms.base import Platform
+from hand_tracking.frontend.platforms.macos import MacPlatform
 from hand_tracking.frontend.platforms.detect import current_platform
 from hand_tracking.frontend.platforms.windows import WindowsPlatform
 from hand_tracking.frontend.tk_camera_preview import TkCameraPreview
@@ -103,10 +104,9 @@ class PlatformTests(unittest.TestCase):
         preview.show(object())  # Before attach there is no window to draw in.
         preview.close()
         self.assertFalse(mac.create_title_bar_style().available)
-        self.assertEqual(mac.installed_fonts(), ())
         self.assertEqual(mac.default_camera_index, 0)
-        with self.assertRaisesRegex(RuntimeError, "not available on macOS"):
-            mac.create_overlay_window(None)
+        with self.assertRaisesRegex(RuntimeError, "not available on Portable"):
+            Platform().create_overlay_window(None)
 
     def test_components_never_check_the_operating_system_themselves(self) -> None:
         allowed = {

@@ -62,6 +62,7 @@ class Application:
         self._model_ui_state = None
         self._gesture_display = DisplayThrottle()
         self._hand_reports = []
+        self._preview_hidden = False
         self.hand_tracking = HandTrackingModule(
             settings, HandTrackingActions(
                 restart=self.restart_hand_tracking,
@@ -130,7 +131,7 @@ class Application:
         self.engine.restart_hand_tracking()
         self._hand_reports = []
         self._gesture_display.reset()
-        self.hand_tracking.debug.set_tracking_paused(False)
+        self.hand_tracking.set_tracking_paused(False)
 
     def request_quit(self) -> None:
         self.running = False
@@ -146,7 +147,7 @@ class Application:
 
     def toggle_tracking(self) -> None:
         paused = self.engine.toggle_pause()
-        self.hand_tracking.debug.set_tracking_paused(paused)
+        self.hand_tracking.set_tracking_paused(paused)
 
     def set_tracking_tab_active(self, active: bool) -> None:
         """The hand debugging page or enabled overlay can keep commands active."""
@@ -221,10 +222,18 @@ class Application:
         self._hand_reports = result.hand_reports
         self._refresh_gesture_display()
 
+        # A camera overlay shows the picture itself, so the preview window steps aside.
+        overlay_camera = self.hand_tracking.shows_camera
+        if overlay_camera != self._preview_hidden:
+            self.preview.set_visible(not overlay_camera)
+            self._preview_hidden = overlay_camera
         if result.frame is None:
             return 10
         with self.engine.frame_profiler.measure("preview.submit"):
-            self.preview.show(result.frame)
+            if overlay_camera:
+                self.hand_tracking.show_frame(result.frame)
+            else:
+                self.preview.show(result.frame)
         return 1
 
     def _show_statuses(self, result: FrameResult) -> None:

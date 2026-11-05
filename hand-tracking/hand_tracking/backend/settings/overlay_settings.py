@@ -8,6 +8,12 @@ from hand_tracking.backend.common.config_values import is_finite_number, merged_
 
 OverlayStyle = Literal["Simple", "Pretty"]
 OVERLAY_STYLES: tuple[OverlayStyle, ...] = ("Simple", "Pretty")
+# What the overlay shows: the hand stats, or the camera picture above them.
+OverlayContent = Literal["Stats", "Camera and stats"]
+OVERLAY_CONTENTS: tuple[OverlayContent, ...] = ("Stats", "Camera and stats")
+# Width of the camera-and-stats overlay; the stats-only overlay keeps its natural size.
+OverlaySize = Literal["Small", "Medium", "Large"]
+OVERLAY_SIZES: tuple[OverlaySize, ...] = ("Small", "Medium", "Large")
 
 
 @dataclass(frozen=True)
@@ -27,6 +33,12 @@ class OverlaySettings:
     style: OverlayStyle = "Pretty"
     background_opacity: float = 0.94
     position: OverlayPosition | None = None
+    content: OverlayContent = "Stats"
+    size: OverlaySize = "Medium"
+
+    @property
+    def shows_camera(self) -> bool:
+        return self.content == "Camera and stats"
 
     def __post_init__(self) -> None:
         if self.style not in OVERLAY_STYLES:
@@ -35,10 +47,16 @@ class OverlaySettings:
             raise ValueError("Background opacity must be between 0% and 100%.")
         if self.position is not None and not isinstance(self.position, OverlayPosition):
             raise ValueError("Overlay position must contain screen coordinates.")
+        if self.content not in OVERLAY_CONTENTS:
+            raise ValueError("Choose what the overlay shows: Stats, or Camera and stats.")
+        if self.size not in OVERLAY_SIZES:
+            raise ValueError("Choose a Small, Medium or Large overlay.")
 
     @classmethod
     def from_dict(cls, value: object) -> "OverlaySettings":
-        values = merged_fields(cls, value, "Overlay settings", ("style", "background_opacity"))
+        values = merged_fields(
+            cls, value, "Overlay settings", ("style", "background_opacity", "content", "size"),
+        )
         raw_position = (value or {}).get("position")
         if raw_position is None:
             position = None

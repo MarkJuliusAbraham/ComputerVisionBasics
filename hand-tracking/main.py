@@ -72,7 +72,7 @@ def main():
     platform = current_platform()
     platform.prepare_process()
     with RuntimeDiagnostics() as diagnostics:
-        settings = Settings()
+        settings = Settings(platform_key=platform.name)
         while True:
             diagnostics.heartbeat()
             settings.load()

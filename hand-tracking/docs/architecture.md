@@ -108,7 +108,13 @@ flowchart TD
   does not run another detector. The camera preview has its own OpenCV window
   thread and retains only the latest submitted frame.
 - Tracking respects the model status, tracking enablement, and manual pause.
-  The active debugging page or enabled desktop overlay permits commands. A
+  The active debugging page or the enabled desktop overlay permits commands.
+  The overlay shows the hand stats, or the camera above them
+  (`OverlaySettings.content`, switched on the Main tab). With the camera,
+  `OverlayComposer` stacks the latest annotated frame (at most 30 per second)
+  above the cached stats panel and the camera preview window is hidden. Each
+  `Platform` supplies the overlay window: a layered window on Windows, an
+  AppKit `NSPanel` on macOS (`MacOverlayWindow`). A
   settings preview can request detection with command invocation disabled.
 
 ## Inside the gesture handler

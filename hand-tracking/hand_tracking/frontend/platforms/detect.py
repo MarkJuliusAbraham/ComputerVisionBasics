@@ -2,7 +2,7 @@
 
 import sys
 
-from .base import MacPlatform, Platform
+from .base import Platform
 
 
 def current_platform(system: str = sys.platform) -> Platform:
@@ -12,5 +12,7 @@ def current_platform(system: str = sys.platform) -> Platform:
 
         return WindowsPlatform()
     if system == "darwin":
+        from .macos import MacPlatform
+
         return MacPlatform()
     return Platform()

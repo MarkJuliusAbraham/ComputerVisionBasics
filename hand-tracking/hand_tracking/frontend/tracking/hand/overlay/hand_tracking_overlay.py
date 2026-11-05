@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from contextlib import ExitStack
+from dataclasses import replace
 import tkinter as tk
 
 from hand_tracking.frontend.components.overlays.fonts import InstalledFonts, OverlayFontProvider
@@ -9,6 +10,7 @@ from hand_tracking.frontend.components.overlays.window import ClickThroughOverla
 from hand_tracking.frontend.platforms.base import Platform
 from hand_tracking.backend.settings.overlay_settings import OverlayPosition, OverlaySettings
 
+from .composer import OverlayComposer
 from .options_dialog import OverlayOptionsDialog
 from .renderer import HandOverlayRenderer
 
@@ -24,10 +26,11 @@ class HandTrackingOverlay:
         installed_fonts: Callable[[], InstalledFonts] = tuple,
     ) -> None:
         self.parent = parent
-        # Both come from the Platform: the overlay window is Windows-only.
+        # Both come from the Platform, which provides each system's overlay window.
         self._window_factory = window_factory
         self._installed_fonts = installed_fonts
         self._window: ClickThroughOverlayWindow | None = None
+        self._composer: OverlayComposer | None = None
         self._data = LiveHandData()
         self._max_deviation = max_deviation
         self._preferences = self.saved_preferences = preferences
@@ -39,6 +42,26 @@ class HandTrackingOverlay:
     def enabled(self) -> bool:
         return self._window is not None
 
+    @property
+    def preferences(self) -> OverlaySettings:
+        return self._preferences
+
+    @property
+    def shows_camera(self) -> bool:
+        """Enabled with the camera picture, which then replaces the preview window."""
+        return self.enabled and self._preferences.shows_camera
+
+    def show_frame(self, frame) -> None:
+        if self.shows_camera and self._composer.offer_frame(frame):
+            self._window.redraw()
+
+    def set_content(self, **changes) -> None:
+        """Apply and save a workspace choice (content or size) straight away."""
+        self.set_preferences(replace(self._preferences, **changes))
+        self._save_preferences(replace(self.saved_preferences, **changes))
+        if self._options is not None:
+            self._options.adopt_saved(**changes)
+
     def enable(self) -> None:
         if self.enabled:
             return
@@ -47,10 +70,11 @@ class HandTrackingOverlay:
             renderer = HandOverlayRenderer(
                 window.appearance, fonts=OverlayFontProvider(window.appearance, self._installed_fonts),
             )
-            window.set_renderer(lambda opacity: renderer.render(
-                self._data, style=self._preferences.style, opacity=opacity,
-                max_deviation=self._max_deviation,
+            composer = OverlayComposer(renderer, window.appearance)
+            window.set_renderer(lambda opacity: composer.compose(
+                self._data, self._preferences, opacity=opacity, max_deviation=self._max_deviation,
             ))
+            self._composer = composer
             window.position = self._position
             window.background_opacity = self._preferences.background_opacity
             window.on_position_changed = self._position_changed
@@ -131,6 +155,7 @@ class HandTrackingOverlay:
             if self._window is not None:
                 cleanup.callback(self._window.close)
         self._window = None
+        self._composer = None
 
     def hide(self) -> None:
         if self._window is not None:

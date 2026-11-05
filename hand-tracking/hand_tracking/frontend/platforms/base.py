@@ -28,6 +28,7 @@ class FramePreview(Protocol):
     """A window showing the annotated camera frame."""
 
     def attach(self, parent) -> None: ...
+    def set_visible(self, visible: bool) -> None: ...
     def show(self, frame) -> None: ...
     def close(self) -> None: ...
 
@@ -73,6 +74,3 @@ class Platform:
         """(lowercase family name, font file) pairs for drawing overlay text."""
         return ()
 
-
-class MacPlatform(Platform):
-    name = "macOS"

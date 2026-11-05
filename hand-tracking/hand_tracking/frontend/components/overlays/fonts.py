@@ -51,4 +51,6 @@ class OverlayFontProvider:
                     return font
                 except OSError:
                     continue
-        raise RuntimeError(f"Cannot load a system font for the overlay ({family}).")
+        # No matching system font (none found, or an unusual system): Pillow's
+        # bundled font keeps the overlay readable instead of failing.
+        return ImageFont.load_default(size=size)

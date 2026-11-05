@@ -101,7 +101,8 @@ class OverlayCleanupTests(unittest.TestCase):
     def test_hand_workspace_destroyed_when_overlay_shutdown_fails(self):
         module = HandTrackingModule.__new__(HandTrackingModule)
         module._debug_active = True
-        module.overlay = SimpleNamespace(shutdown=Mock(side_effect=RuntimeError("overlay failed")))
+        module.mini = None
+        module.overlay =SimpleNamespace(shutdown=Mock(side_effect=RuntimeError("overlay failed")))
         close_window = Mock()
         module.window = SimpleNamespace(close=close_window)
         with self.assertRaisesRegex(RuntimeError, "overlay"):

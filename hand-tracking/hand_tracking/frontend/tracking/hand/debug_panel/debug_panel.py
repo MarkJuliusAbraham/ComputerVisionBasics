@@ -15,6 +15,7 @@ class HandDebugPanel:
     def __init__(
         self, on_open_settings=None, on_toggle_overlay: Action | None = None,
         on_overlay_options: Action | None = None,
+        on_overlay_content=None, on_overlay_size=None,
     ):
         self.widget: HandDebugTab | None = None
         self._paused = False
@@ -24,6 +25,9 @@ class HandDebugPanel:
         self._on_toggle_overlay = on_toggle_overlay
         self._on_overlay_options = on_overlay_options
         self._overlay_enabled = False
+        self._on_overlay_content = on_overlay_content
+        self._on_overlay_size = on_overlay_size
+        self._overlay_choices = ("Stats", "Medium")
 
     def build(
         self, parent: tk.Misc, *, callbacks: ControlCallbacks,
@@ -37,10 +41,13 @@ class HandDebugPanel:
             on_open_settings=self._on_open_settings,
             on_toggle_overlay=self._on_toggle_overlay,
             on_overlay_options=self._on_overlay_options,
+            on_overlay_content=self._on_overlay_content,
+            on_overlay_size=self._on_overlay_size,
         )
         self.widget.pack(fill="both", expand=True)
         self.set_tracking_paused(self._paused)
         self.set_overlay_enabled(self._overlay_enabled)
+        self.set_overlay_choices(*self._overlay_choices)
         self.set_model_status(self._model_status)
         return self.widget
 
@@ -53,6 +60,11 @@ class HandDebugPanel:
         self._overlay_enabled = enabled
         if self.widget is not None:
             self.widget.set_overlay_enabled(enabled)
+
+    def set_overlay_choices(self, content: str, size: str) -> None:
+        self._overlay_choices = (content, size)
+        if self.widget is not None:
+            self.widget.set_overlay_choices(content, size)
 
     def set_model_status(self, status):
         self._model_status = status

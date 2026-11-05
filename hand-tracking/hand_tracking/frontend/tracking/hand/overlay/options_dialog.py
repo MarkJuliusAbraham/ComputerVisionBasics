@@ -127,6 +127,12 @@ class OverlayOptionsDialog:
     def _toggle_reposition(self) -> None:
         self._set_repositioning(not self._repositioning)
 
+    def adopt_saved(self, **changes) -> None:
+        """Take a change saved elsewhere (the workspace switch), keeping this draft's edits."""
+        self._saved = replace(self._saved, **changes)
+        self._draft = replace(self._draft, **changes)
+        self.actions.set_dirty(self.is_dirty())
+
     def accept(self, preferences: OverlaySettings) -> None:
         self._loading = True
         self._saved = self._draft = preferences

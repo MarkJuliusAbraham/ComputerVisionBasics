@@ -40,8 +40,24 @@ macOS:
   Windows). If that is the wrong camera, pick another in the hub's camera list.
 - **Camera preview.** On macOS the preview is drawn in a Tk window, refreshed
   up to 30 times a second. Windows uses OpenCV's own window.
-- **Desktop overlay.** The click-through overlay uses Windows-only APIs. On
-  macOS, turning it on shows an error and the rest of the app keeps working.
+- **Desktop overlay.** Keyboard commands only run while you can see the
+  tracker: the hand-tracking window's Main tab, or the desktop overlay. The
+  overlay is click-through, has a transparent background, and stays on top,
+  including over apps in full-screen mode. On the Main tab, **Overlay shows**
+  switches it between **Stats** (the hand panels) and **Camera and stats**
+  (the camera picture above them, in a Small, Medium or Large width; the
+  preview window steps aside while it shows). With the overlay on, you can
+  minimize every other window and commands keep running.
+
+  On macOS the overlay is a native AppKit panel and needs `pyobjc`
+  (installed by `requirements.txt`). To move it, open **Overlay settings…**,
+  click **Reposition overlay**, drag it, then click **Done positioning**.
+- **App Nap.** macOS slows apps you are not looking at. `requirements.txt`
+  installs `pyobjc` on macOS so the app can opt out while it runs; without it
+  a warning is logged and tracking may slow in the background.
+- **UI scale.** Each operating system keeps its own UI scale in
+  `settings/settings.json` (`ui_scales`), so a scale chosen on Windows does not
+  enlarge the macOS windows. macOS starts on Auto.
 - **Saved paths.** Settings and the profile selection store paths inside this
   folder relative to it, so they work on both systems. An absolute path saved
   on the other system falls back to the bundled model and profiles.

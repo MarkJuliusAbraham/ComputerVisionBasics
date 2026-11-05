@@ -20,6 +20,7 @@ class CameraPreview:
         self.backend = backend
         self.window_style = window_style
         self._pending_frame = None
+        self._visible = True
         self._failure = None
         self._lock = threading.Lock()
         self._wake = threading.Event()
@@ -32,6 +33,14 @@ class CameraPreview:
     def attach(self, parent):
         """This preview owns its own native window; it needs no Tk parent."""
 
+    def set_visible(self, visible):
+        """Hide or restore the window; hidden, it is destroyed and frames are ignored."""
+        with self._lock:
+            self._visible = visible
+            if not visible:
+                self._pending_frame = None
+            self._wake.set()
+
     def show(self, frame):
         """Transfer a completed frame; the caller must not modify it afterward.
 
@@ -41,7 +50,7 @@ class CameraPreview:
         with self._lock:
             if self._failure is not None:
                 raise RuntimeError("The camera preview failed") from self._failure
-            if self._stopping.is_set() or frame is None:
+            if self._stopping.is_set() or frame is None or not self._visible:
                 return
             self._pending_frame = frame
             self._wake.set()
@@ -57,8 +66,14 @@ class CameraPreview:
                     self._wake.clear()
                     frame = self._pending_frame
                     self._pending_frame = None
+                    visible = self._visible
                 if self._stopping.is_set():
                     break
+                if not visible:
+                    if created:
+                        self.backend.destroyWindow(self.title)
+                        created = False
+                    continue
                 if frame is not None:
                     if not created:
                         self.backend.namedWindow(self.title, self.backend.WINDOW_AUTOSIZE)
