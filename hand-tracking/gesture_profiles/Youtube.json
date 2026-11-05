@@ -1,0 +1,266 @@
+{
+  "version": 1,
+  "reset_match": {
+    "fingers": {
+      "index": [
+        "closed",
+        "curled",
+        "nearly_closed",
+        "very_curled"
+      ],
+      "middle": [
+        "closed",
+        "curled",
+        "nearly_closed",
+        "very_curled"
+      ],
+      "ring": [
+        "closed",
+        "curled",
+        "nearly_closed",
+        "very_curled"
+      ],
+      "pinky": [
+        "closed",
+        "curled",
+        "nearly_closed",
+        "very_curled"
+      ]
+    }
+  },
+  "repeat_settings": {
+    "trigger": "distance",
+    "shake_amplitude": 0.1,
+    "shake_window_seconds": 0.1,
+    "initial_displacement": 0.09,
+    "distance_threshold": 0.06,
+    "min_interval_seconds": 0.025,
+    "max_repeats": 3,
+    "axis_weights": {
+      "x": 1.0,
+      "y": 0.0,
+      "z": 0.0
+    },
+    "buffer_credit": 0.8
+  },
+  "gestures": [
+    {
+      "id": "f",
+      "name": "Pause/Play",
+      "match": {
+        "fingers": {
+          "index": [
+            "closed",
+            "curled",
+            "nearly_closed",
+            "partial",
+            "very_curled"
+          ],
+          "middle": [
+            "closed",
+            "curled",
+            "nearly_closed",
+            "partial",
+            "very_curled"
+          ],
+          "ring": [
+            "straight"
+          ],
+          "pinky": [
+            "straight"
+          ]
+        },
+        "palm": "facing_camera"
+      },
+      "commands": {
+        "steps": [
+          {
+            "type": "key_tap",
+            "value": "k"
+          }
+        ],
+        "delay_ms_between_steps": 0
+      },
+      "tracking": {
+        "fingers": [
+          "index"
+        ]
+      },
+      "repeat_settings": {
+        "trigger": "distance",
+        "shake_amplitude": 0.1,
+        "shake_window_seconds": 0.1,
+        "initial_displacement": 0.09,
+        "distance_threshold": 0.06,
+        "min_interval_seconds": 0.025,
+        "max_repeats": 3,
+        "axis_weights": {
+          "x": 1.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "buffer_credit": 0.8
+      },
+      "use_optimistic_tracking": true
+    },
+    {
+      "id": "gesture_236101d4",
+      "name": "Back",
+      "match": {
+        "fingers": {
+          "thumb": [
+            "straight"
+          ],
+          "index": [
+            "straight"
+          ],
+          "middle": [
+            "straight"
+          ],
+          "ring": [
+            "straight"
+          ],
+          "pinky": [
+            "straight"
+          ]
+        }
+      },
+      "commands": {
+        "steps": [
+          {
+            "type": "key_tap",
+            "value": "j"
+          }
+        ],
+        "delay_ms_between_steps": 0
+      },
+      "tracking": {
+        "fingers": [
+          "index"
+        ]
+      },
+      "repeat_settings": {
+        "trigger": "distance",
+        "shake_amplitude": 0.1,
+        "shake_window_seconds": 0.1,
+        "initial_displacement": 0.09,
+        "distance_threshold": 0.06,
+        "min_interval_seconds": 0.025,
+        "max_repeats": 3,
+        "axis_weights": {
+          "x": 1.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "buffer_credit": 0.8
+      },
+      "use_optimistic_tracking": true
+    },
+    {
+      "id": "gesture_6827d049",
+      "name": "Forward",
+      "match": {
+        "fingers": {
+          "thumb": [
+            "straight"
+          ],
+          "index": [
+            "straight"
+          ],
+          "middle": [
+            "straight"
+          ],
+          "ring": [
+            "straight"
+          ],
+          "pinky": [
+            "partial"
+          ]
+        }
+      },
+      "commands": {
+        "steps": [
+          {
+            "type": "key_tap",
+            "value": "l"
+          }
+        ],
+        "delay_ms_between_steps": 0
+      },
+      "tracking": {
+        "fingers": [
+          "index"
+        ]
+      },
+      "repeat_settings": {
+        "trigger": "distance",
+        "shake_amplitude": 0.1,
+        "shake_window_seconds": 0.1,
+        "initial_displacement": 0.09,
+        "distance_threshold": 0.06,
+        "min_interval_seconds": 0.025,
+        "max_repeats": 3,
+        "axis_weights": {
+          "x": 1.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "buffer_credit": 0.8
+      },
+      "use_optimistic_tracking": true
+    },
+    {
+      "id": "gesture_ea074e54",
+      "name": "Mute/Unmute",
+      "match": {
+        "fingers": {
+          "thumb": [
+            "straight"
+          ],
+          "index": [
+            "straight"
+          ],
+          "middle": [
+            "straight"
+          ],
+          "ring": [
+            "straight"
+          ],
+          "pinky": [
+            "curled"
+          ]
+        }
+      },
+      "commands": {
+        "steps": [
+          {
+            "type": "key_tap",
+            "value": "m"
+          }
+        ],
+        "delay_ms_between_steps": 0
+      },
+      "tracking": {
+        "fingers": [
+          "index"
+        ]
+      },
+      "repeat_settings": {
+        "trigger": "distance",
+        "shake_amplitude": 0.1,
+        "shake_window_seconds": 0.1,
+        "initial_displacement": 0.09,
+        "distance_threshold": 0.06,
+        "min_interval_seconds": 0.025,
+        "max_repeats": 3,
+        "axis_weights": {
+          "x": 1.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "buffer_credit": 0.8
+      },
+      "use_optimistic_tracking": true
+    }
+  ]
+}

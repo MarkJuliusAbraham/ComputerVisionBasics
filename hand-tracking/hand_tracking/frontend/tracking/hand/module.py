@@ -15,6 +15,8 @@ from hand_tracking.backend.landmarker.model_asset import HandLandmarkerAsset
 from hand_tracking.backend.settings.settings_manager import Settings
 from hand_tracking.backend.settings.overlay_settings import OverlaySettings
 
+from hand_tracking.frontend.platforms.base import Platform
+
 from .debug_panel.debug_panel import HandDebugPanel
 from .live_pose_feed import LivePoseFeed
 from .mapping_panel.mapping_panel import MappingPanel
@@ -38,9 +40,10 @@ class HandTrackingModule:
 
     def __init__(
         self, settings: Settings, actions: HandTrackingActions, *,
-        model_asset: HandLandmarkerAsset | None = None,
+        model_asset: HandLandmarkerAsset | None = None, platform: Platform | None = None,
     ) -> None:
         self.settings = settings
+        self.platform = platform if platform is not None else Platform()
         self.actions = actions
         self.debug = HandDebugPanel(
             on_open_settings=self.open_settings, on_toggle_overlay=self.toggle_overlay,
@@ -63,6 +66,8 @@ class HandTrackingModule:
                 parent,
                 max_deviation=self.settings.data.max_finger_deviation,
                 preferences=self.settings.data.hand_overlay, on_save=self.save_overlay_preferences,
+                window_factory=self.platform.create_overlay_window,
+                installed_fonts=self.platform.installed_fonts,
             )
             self._publish_report()
         if self.window is None:

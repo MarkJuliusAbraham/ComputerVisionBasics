@@ -4,7 +4,9 @@ from collections.abc import Callable
 from contextlib import ExitStack
 import tkinter as tk
 
+from hand_tracking.frontend.components.overlays.fonts import InstalledFonts, OverlayFontProvider
 from hand_tracking.frontend.components.overlays.window import ClickThroughOverlayWindow
+from hand_tracking.frontend.platforms.base import Platform
 from hand_tracking.backend.settings.overlay_settings import OverlayPosition, OverlaySettings
 
 from .options_dialog import OverlayOptionsDialog
@@ -18,10 +20,13 @@ class HandTrackingOverlay:
         self, parent: tk.Misc, *, max_deviation: float,
         preferences: OverlaySettings = OverlaySettings(),
         on_save: Callable[[OverlaySettings], None] | None = None,
-        window_factory: Callable[[tk.Misc], ClickThroughOverlayWindow] = ClickThroughOverlayWindow,
+        window_factory: Callable[[tk.Misc], ClickThroughOverlayWindow] = Platform().create_overlay_window,
+        installed_fonts: Callable[[], InstalledFonts] = tuple,
     ) -> None:
         self.parent = parent
+        # Both come from the Platform: the overlay window is Windows-only.
         self._window_factory = window_factory
+        self._installed_fonts = installed_fonts
         self._window: ClickThroughOverlayWindow | None = None
         self._data = LiveHandData()
         self._max_deviation = max_deviation
@@ -39,7 +44,9 @@ class HandTrackingOverlay:
             return
         window = self._window_factory(self.parent)
         try:
-            renderer = HandOverlayRenderer(window.appearance)
+            renderer = HandOverlayRenderer(
+                window.appearance, fonts=OverlayFontProvider(window.appearance, self._installed_fonts),
+            )
             window.set_renderer(lambda opacity: renderer.render(
                 self._data, style=self._preferences.style, opacity=opacity,
                 max_deviation=self._max_deviation,

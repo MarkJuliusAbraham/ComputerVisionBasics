@@ -29,6 +29,9 @@ class CameraPreview:
         )
         self._worker.start()
 
+    def attach(self, parent):
+        """This preview owns its own native window; it needs no Tk parent."""
+
     def show(self, frame):
         """Transfer a completed frame; the caller must not modify it afterward.
 

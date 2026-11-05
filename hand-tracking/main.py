@@ -16,18 +16,17 @@ from hand_tracking.backend.gestures.gesture_handler import GestureHandler
 from hand_tracking.backend.landmarker.hand_tracker import HandTracker
 from hand_tracking.backend.settings.settings_manager import Settings
 from hand_tracking.frontend.application import Application
-from hand_tracking.frontend.camera_preview import CameraPreview
-from hand_tracking.frontend.components.dpi import enable_dpi_awareness
-from hand_tracking.frontend.core.native_window_style import FixedNativeWindowStyle
+from hand_tracking.frontend.platforms.base import FramePreview, Platform
+from hand_tracking.frontend.platforms.detect import current_platform
 
-def open_camera(startup: ExitStack) -> Camera:
-    camera = Camera()
+def open_camera(startup: ExitStack, platform: Platform) -> Camera:
+    camera = Camera(camera_index=platform.default_camera_index)
     startup.callback(camera.release)
     return camera
 
 
-def open_preview(startup: ExitStack) -> CameraPreview:
-    preview = CameraPreview(window_style=FixedNativeWindowStyle())
+def open_preview(startup: ExitStack, platform: Platform) -> FramePreview:
+    preview = platform.create_camera_preview()
     startup.callback(preview.close)
     return preview
 
@@ -51,11 +50,11 @@ def create_frame_overlays(*, command_overlay=None) -> FrameOverlays:
     )
 
 
-def build_application(settings: Settings, *, heartbeat=None) -> Application:
+def build_application(settings: Settings, platform: Platform, *, heartbeat=None) -> Application:
     """Create every component; close the ones already started if one fails."""
     with ExitStack() as startup:
-        camera = open_camera(startup)
-        preview = open_preview(startup)
+        camera = open_camera(startup, platform)
+        preview = open_preview(startup, platform)
         # Temporary Invoker feature: remove this construction and the two
         # optional connections below to run without its element stack/display.
         invoker = InvokerOverlay()
@@ -63,19 +62,21 @@ def build_application(settings: Settings, *, heartbeat=None) -> Application:
         engine = TrackingEngine(
             settings, camera, pipeline, create_frame_overlays(command_overlay=invoker),
         )
-        app = Application(engine, preview, heartbeat=heartbeat)
+        app = Application(engine, preview, heartbeat=heartbeat, platform=platform)
         startup.pop_all()  # Application owns cleanup after construction.
     return app
 
 
 def main():
-    enable_dpi_awareness()
+    # Everything that differs between Windows and macOS comes from this object.
+    platform = current_platform()
+    platform.prepare_process()
     with RuntimeDiagnostics() as diagnostics:
         settings = Settings()
         while True:
             diagnostics.heartbeat()
             settings.load()
-            app = build_application(settings, heartbeat=diagnostics.heartbeat)
+            app = build_application(settings, platform, heartbeat=diagnostics.heartbeat)
             app.run()
 
             if not app.restart_requested:

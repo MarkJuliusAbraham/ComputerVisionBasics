@@ -6,10 +6,11 @@ from dataclasses import dataclass
 
 from hand_tracking.backend.engine.engine import FrameResult, TrackingEngine
 from hand_tracking.backend.settings.settings_manager import SettingsData, SettingsValues
-from hand_tracking.frontend.camera_preview import CameraPreview
 from hand_tracking.frontend.control_window import ControlWindow as Gui
 from hand_tracking.frontend.core.state import ControlCallbacks, ControlWindowContext, PanelSet
+from hand_tracking.frontend.core.ui_thread_gc import UiThreadGarbageCollector
 from hand_tracking.frontend.main_panel.main_panel import MainPanel
+from hand_tracking.frontend.platforms.base import FramePreview, Platform
 from hand_tracking.frontend.settings_panel.settings_panel import SettingsPanel
 from hand_tracking.frontend.tracking.registry import TrackingWindowRegistry
 from hand_tracking.frontend.tracking.hand.module import HandTrackingActions, HandTrackingModule
@@ -44,9 +45,10 @@ class Application:
     """Runs the control windows and displays what the tracking engine produces."""
 
     def __init__(
-        self, engine: TrackingEngine, preview: CameraPreview, *,
-        heartbeat: Callable[[], None] | None = None,
+        self, engine: TrackingEngine, preview: FramePreview, *,
+        heartbeat: Callable[[], None] | None = None, platform: Platform | None = None,
     ):
+        platform = platform if platform is not None else Platform()
         self.engine = engine
         self.preview = preview
         self._heartbeat = heartbeat
@@ -68,7 +70,7 @@ class Application:
                 apply_settings=self.apply_changes,
                 apply_mapping=engine.apply_gesture_config,
             ),
-            model_asset=engine.model_asset,
+            model_asset=engine.model_asset, platform=platform,
         )
         tracking_modules = TrackingWindowRegistry((self.hand_tracking,))
         panels = PanelSet(main=MainPanel(tracking_modules), settings=SettingsPanel())
@@ -86,8 +88,11 @@ class Application:
             panels=panels,
             camera_index=engine.camera.requested_index,
             tracking_modules=tracking_modules,
+            platform=platform,
         )
         self.gui = Gui(context)
+        self.preview.attach(self.gui.window_parent)
+        self._garbage_collector = UiThreadGarbageCollector(self.gui)
 
     def load_settings_file(self, path: str) -> bool:
         """Called when the user browses to a different file."""
@@ -155,6 +160,8 @@ class Application:
 
     def run(self):
         try:
+            # Free tkinter objects only on this thread; see ui_thread_gc.py.
+            self._garbage_collector.start()
             self._poll_ui_heartbeat()
             self.gui.after(0, self._process_frame)
             self.gui.run()
@@ -261,6 +268,7 @@ class Application:
         # Hide topmost surfaces before any native worker can delay shutdown.
         # ExitStack still attempts every cleanup when an earlier one raises.
         with ExitStack() as cleanup:
+            cleanup.callback(self._garbage_collector.stop)
             cleanup.callback(self.preview.close)
             cleanup.callback(self.gui.close)
             cleanup.callback(self.engine.close)

@@ -7,7 +7,6 @@ https://learn.microsoft.com/en-us/windows/win32/api/dwmapi/ne-dwmapi-dwmwindowat
 import ctypes
 from ctypes import wintypes
 from dataclasses import dataclass
-import sys
 import tkinter as tk
 from weakref import WeakKeyDictionary
 
@@ -30,9 +29,8 @@ class NativeTitleBarStyle:
     TEXT_COLOR = 36
 
     def __init__(self):
+        """Created by WindowsPlatform; older Windows without DWM support is tolerated."""
         self._dwm = None
-        if sys.platform != "win32":
-            return
         try:
             self._user32 = win32.user32()
             dwm = ctypes.WinDLL("dwmapi", use_last_error=True)
@@ -73,13 +71,26 @@ class NativeTitleBarStyle:
         return wintypes.DWORD(red | (green << 8) | (blue << 16))
 
 
+class NoTitleBarStyle:
+    """For systems without native title-bar coloring: never applies anything."""
+
+    available = False
+
+    def handle(self, window):
+        return None
+
+    def apply(self, window, handle, palette):
+        pass
+
+
 class TitleBarTheme:
     """Share title-bar styling across the hub, tracking windows, and dialogs."""
 
     def __init__(self, root, palette_provider, backend=None):
         self.root = root
         self.palette_provider = palette_provider
-        self.backend = backend if backend is not None else NativeTitleBarStyle()
+        # The platform's style is installed with the hub window; see Platform.
+        self.backend = backend if backend is not None else NoTitleBarStyle()
         self._applied = WeakKeyDictionary()
         self._pending = set()
         self._refresh_pending = False
@@ -88,8 +99,9 @@ class TitleBarTheme:
             root.bind_class("Toplevel", "<Map>", self._on_map, add="+")
 
     @classmethod
-    def for_root(cls, root, palette_provider):
-        return root_service(root, "_title_bar_theme", lambda owner: cls(owner, palette_provider))
+    def for_root(cls, root, palette_provider, backend=None):
+        """The root's shared theme; ``backend`` applies only when it is first created."""
+        return root_service(root, "_title_bar_theme", lambda owner: cls(owner, palette_provider, backend))
 
     def refresh(self):
         if self.backend.available and not self._refresh_pending:

@@ -8,7 +8,8 @@ from tkinter import messagebox
 from types import TracebackType
 from hand_tracking.backend.settings.settings_manager import SettingsData
 
-from .components.theme import apply_theme, resolve_scale
+from .components.theme import ThemeColors, apply_theme, resolve_scale
+from .components.themes.title_bar import TitleBarTheme
 from .core.input_interactions import InputInteractionController
 from .core.state import ControlWindowContext
 from .core.window_shell import WindowShell
@@ -24,6 +25,10 @@ class ControlWindow:
             root = tk.Tk()
             startup.callback(root.destroy)
             root.withdraw()
+            # Native title-bar coloring, where the platform has it, for every window of this root.
+            TitleBarTheme.for_root(
+                root, lambda: ThemeColors(root).title_bar, context.platform.create_title_bar_style(),
+            )
             self.shell = WindowShell(
                 root, context, title="Tracking hub", main_title="Main", base_size=(860, 720),
             )
@@ -70,8 +75,16 @@ class ControlWindow:
             except Exception:
                 logging.getLogger(__name__).exception("Could not display the callback failure")
 
+    @property
+    def window_parent(self) -> tk.Misc:
+        """The Tk root other windows, such as a Tk camera preview, belong to."""
+        return self.shell.view.root
+
     def after(self, delay_ms: int, callback: Callable[[], None]) -> str:
         return self.shell.view.root.after(delay_ms, callback)
+
+    def after_cancel(self, identifier: str) -> None:
+        self.shell.view.root.after_cancel(identifier)
 
     def run(self) -> None:
         self.shell.view.root.mainloop()

@@ -1,4 +1,4 @@
 {
-  "source_path": "C:\\Users\\mjabr\\Dev\\Learn\\ComputerVisionBasics\\hand-tracking\\gesture_profiles",
-  "active_profile": "C:\\Users\\mjabr\\Dev\\Learn\\ComputerVisionBasics\\hand-tracking\\gesture_profiles\\invoker_profile.json"
+  "source_path": "gesture_profiles",
+  "active_profile": "gesture_profiles/invoker_profile.json"
 }

@@ -17,6 +17,7 @@ from hand_tracking.backend.gestures.finger_thresholds import (
     splits_are_valid,
 )
 from hand_tracking.backend.common.json_storage import write_json_atomic
+from hand_tracking.backend.common.project_paths import is_foreign_path, portable_path
 from hand_tracking.backend.common.project_paths import SETTINGS_DIR
 
 from .theme_choices import THEMES, resolve_theme
@@ -66,7 +67,9 @@ class SettingsData:
             data["optimistic_tracking"] = OptimisticTrackingSettings.from_dict(data.get("optimistic_tracking"))
         except ValueError:
             data["optimistic_tracking"] = defaults.optimistic_tracking
-        if not isinstance(data.get("hand_landmarker_model_path", defaults.hand_landmarker_model_path), str):
+        model_path = data.get("hand_landmarker_model_path", defaults.hand_landmarker_model_path)
+        if not isinstance(model_path, str) or is_foreign_path(model_path):
+            # A path saved on another operating system falls back to the bundled model.
             data["hand_landmarker_model_path"] = defaults.hand_landmarker_model_path
         data["theme"] = resolve_theme(data.get("theme", defaults.theme)).name
         if data.get("ui_scale", defaults.ui_scale) not in UI_SCALES:
@@ -277,4 +280,6 @@ class Settings:
         return self.data
 
     def save(self):
-        write_json_atomic(self.path, self.data.to_dict(), trailing_newline=False)
+        values = self.data.to_dict()
+        values["hand_landmarker_model_path"] = portable_path(values["hand_landmarker_model_path"])
+        write_json_atomic(self.path, values, trailing_newline=False)

@@ -29,7 +29,7 @@ Until `Application` is fully constructed, `main.py` owns cleanup; afterwards,
 ```mermaid
 %%{init: {"theme": "base", "htmlLabels": false, "flowchart": {"htmlLabels": false}, "themeCSS": ".edgeLabel rect, .labelBkg { fill: #ffffff !important; opacity: 1 !important; }", "themeVariables": {"primaryTextColor": "#202020", "textColor": "#202020", "lineColor": "#8a8a8a", "edgeLabelBackground": "#ffffff", "clusterBkg": "#f7f7f7", "clusterBorder": "#808080", "titleColor": "#202020", "background": "#ffffff"}}}%%
 flowchart TD
-    Main["main()"]:::component --> DPI["enable_dpi_awareness<br/>Before any window exists"]:::component
+    Main["main()"]:::component --> DPI["current_platform().prepare_process<br/>Windows DPI awareness, before any window exists"]:::component
     DPI --> LoadSettings["Settings()<br/>Load or create the settings file"]:::component
     SettingsFile[("settings/settings.json")]:::config -.-> LoadSettings
     LoadSettings --> Data[/"SettingsData"/]:::data
@@ -74,7 +74,7 @@ flowchart TD
 
 ### Step details
 
-1. **Prepare the process.** `enable_dpi_awareness` runs first so Windows does
+1. **Prepare the process.** `main()` picks the `Platform`; on Windows its `prepare_process` enables DPI awareness first so Windows does
    not bitmap-scale any window. `Settings()` reads `settings/settings.json`,
    normalizing invalid values, or writes a default file if none exists.
 2. **Open video.** `Camera()` starts its capture worker immediately and begins

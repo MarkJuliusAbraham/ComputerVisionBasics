@@ -8,7 +8,7 @@ from hand_tracking.backend.gestures.gesture_config import (
     ensure_default_gesture_profile,
 )
 from hand_tracking.backend.common.json_storage import write_json_atomic
-from hand_tracking.backend.common.project_paths import SETTINGS_DIR
+from hand_tracking.backend.common.project_paths import SETTINGS_DIR, portable_path, resolve_saved_path
 
 
 PROFILE_SELECTION_PATH = SETTINGS_DIR / "gesture_profile_selection.json"
@@ -79,7 +79,9 @@ class GestureProfileManager:
             return
 
         source_value = saved.get("source_path")
-        source = Path(source_value) if isinstance(source_value, str) and source_value else DEFAULT_GESTURE_PROFILE_DIR
+        source = resolve_saved_path(
+            source_value if isinstance(source_value, str) else "", DEFAULT_GESTURE_PROFILE_DIR,
+        )
         if source.suffix.lower() == ".json":
             if not source.is_file():
                 source = DEFAULT_GESTURE_PROFILE_DIR
@@ -92,7 +94,9 @@ class GestureProfileManager:
         self.source_path = str(source)
 
         active_value = saved.get("active_profile")
-        active = Path(active_value) if isinstance(active_value, str) and active_value else DEFAULT_GESTURE_CONFIG
+        active = resolve_saved_path(
+            active_value if isinstance(active_value, str) else "", DEFAULT_GESTURE_CONFIG,
+        )
         profiles = self.list_profiles(self.source_path)
         if active not in profiles:
             active = self._preferred_profile(profiles)
@@ -110,8 +114,8 @@ class GestureProfileManager:
 
     def _save_selection(self):
         write_json_atomic(self.selection_path, {
-            "source_path": self.source_path,
-            "active_profile": self.active_profile,
+            "source_path": portable_path(self.source_path),
+            "active_profile": portable_path(self.active_profile),
         })
 
     def set_location(self, path):

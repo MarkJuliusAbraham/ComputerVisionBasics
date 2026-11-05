@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, Callable, Generic, TypeVar
 from hand_tracking.backend.settings.settings_manager import Settings
 from hand_tracking.frontend.components.guarded_notebook import GuardedNotebook
 
+from hand_tracking.frontend.platforms.base import Platform
+
 from .callbacks import Action, ApplySettingsCallback, SettingsPathCallback
 from .panel_contracts import MainPanelContract, MappingPanelContract, PanelCollection, SettingsPanelContract
 
@@ -81,6 +83,7 @@ class ControlWindowContext(WindowContext):
     """Hub dependencies, including its required tracking-window registry."""
 
     tracking_modules: TrackingWindowRegistry = field(kw_only=True)
+    platform: Platform = field(default_factory=lambda: Platform(), kw_only=True)
 
 
 @dataclass

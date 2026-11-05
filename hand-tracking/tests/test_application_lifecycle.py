@@ -16,6 +16,7 @@ class ApplicationLifecycleTests(unittest.TestCase):
         self.app.engine = Mock()
         self.app.preview = Mock()
         self.app.gui = Mock()
+        self.app._garbage_collector = Mock()
         self.app._process_frame_work = Mock(return_value=1)
         self.events = Mock()
         self.events.attach_mock(self.app.gui.hide_overlays, "hide")
@@ -83,6 +84,7 @@ class ApplicationLifecycleTests(unittest.TestCase):
         self.app.close()
         self.app.close()
         self.assertEqual(self.event_names(), ["hide", "engine_close", "windows_close", "preview_close"])
+        self.app._garbage_collector.stop.assert_called_once()
 
     def test_shutdown_attempts_windows_and_preview_even_if_engine_close_raises(self):
         self.app.engine.close.side_effect = RuntimeError("engine failed")

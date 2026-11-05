@@ -232,6 +232,7 @@ reverse. The folders inside it are namespace packages, so they have no
 | `hand_tracking/backend/frame_overlays/` | Drawings added to the camera frame, including the Invoker overlay and its images |
 | `hand_tracking/backend/settings/` | Settings data, validation, and persistence code |
 | `hand_tracking/backend/common/` | Dependency-free helpers and the project folder locations (`project_paths.py`) |
+| `hand_tracking/frontend/platforms/` | `Platform`: everything that differs by operating system (preview window, title bars, overlay and its fonts, DPI, default camera), chosen once in `main.py` |
 | `hand_tracking/frontend/` | Everything the user sees: `application.py` (runs the windows and schedules the engine), `camera_preview.py`, the Tkinter control surface (`core/` window composition and shared state, `components/` reusable widgets), and the feature panels |
 | `hand_tracking/backend/sounds/` | Unused sound helper (see `dead_code_checklist.md`) |
 | `settings/` | Saved settings and the active gesture profile selection (JSON) |

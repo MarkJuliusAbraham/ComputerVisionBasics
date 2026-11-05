@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 
 from hand_tracking.frontend.components.overlays.window import ClickThroughOverlayWindow
 from hand_tracking.frontend.control_window import ControlWindow
+from hand_tracking.frontend.platforms.base import Platform
 from hand_tracking.frontend.tracking.hand.module import HandTrackingModule
 from hand_tracking.frontend.tracking.hand.overlay.hand_tracking_overlay import HandTrackingOverlay
 from hand_tracking.frontend.tracking.hand.overlay.options_dialog import OverlayOptionsDialog
@@ -15,7 +16,7 @@ from hand_tracking.frontend.tracking.registry import TrackingWindowRegistry
 class OverlayCleanupTests(unittest.TestCase):
     def test_failed_hub_construction_destroys_the_partial_tk_root(self):
         root = Mock()
-        context = SimpleNamespace(callbacks=SimpleNamespace(on_close=Mock()))
+        context = SimpleNamespace(callbacks=SimpleNamespace(on_close=Mock()), platform=Platform())
         with patch("hand_tracking.frontend.control_window.tk.Tk", return_value=root), patch(
             "hand_tracking.frontend.control_window.WindowShell",
             side_effect=RuntimeError("shell failed"),
