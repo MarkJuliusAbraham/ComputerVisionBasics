@@ -84,10 +84,18 @@ flowchart TD
   enable, pause, and command-activity switches that decide whether a frame is
   analyzed. `process_frame` returns a `FrameResult`: camera and model status,
   the hand reports, and the annotated frame.
-- `Application` (frontend) owns the control windows and the `CameraPreview`.
-  It schedules `TrackingEngine.process_frame` through Tk's `after` callbacks
-  and shows each `FrameResult`. Gesture classification, matching, command
-  scheduling, and UI updates all run on that thread.
+- `EngineRunner` (backend) runs the engine on its own thread
+  (`tracking-engine`): it applies queued requests, waits up to 5 ms for a
+  newer camera frame (`Camera.read_newer`), processes it, and publishes an
+  `EngineSnapshot` (result + switches). Requests run in the order made, all
+  before the next frame, so "commands off" affects every later frame. Frame
+  processing, gesture matching and keyboard commands never wait for the UI.
+- `Application` (frontend) owns the control windows and the preview. It
+  validates and saves settings itself (so errors show at once), sends every
+  other action to the runner as a request, and every 15 ms displays the
+  newest snapshot. Only drawing (panels, overlay, Tk preview) runs on Tk's
+  thread. An engine-thread failure is reported by the next poll, which stops
+  commands, hides overlays and shows the error.
 - `Camera` captures independently and publishes a latest-frame buffer and a
   `CameraStatus`. The application receives a copy because it modifies the
   displayed frame, and passes the frame's aspect ratio to the detector.

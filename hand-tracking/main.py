@@ -6,6 +6,7 @@ from hand_tracking.backend.capture.camera import Camera
 from hand_tracking.backend.common.diagnostics import RuntimeDiagnostics
 from hand_tracking.backend.engine.components import FrameOverlays, HandPipeline
 from hand_tracking.backend.engine.engine import TrackingEngine
+from hand_tracking.backend.engine.runner import EngineRunner
 from hand_tracking.backend.frame_overlays.debug_overlay import DebugOverlay
 from hand_tracking.backend.frame_overlays.gesture_path_overlay import GesturePathOverlay
 from hand_tracking.backend.frame_overlays.hand_drawer import HandDrawer
@@ -62,7 +63,8 @@ def build_application(settings: Settings, platform: Platform, *, heartbeat=None)
         engine = TrackingEngine(
             settings, camera, pipeline, create_frame_overlays(command_overlay=invoker),
         )
-        app = Application(engine, preview, heartbeat=heartbeat, platform=platform)
+        # Tracking runs on its own thread; Application starts and stops it.
+        app = Application(EngineRunner(engine), preview, heartbeat=heartbeat, platform=platform)
         startup.pop_all()  # Application owns cleanup after construction.
     return app
 

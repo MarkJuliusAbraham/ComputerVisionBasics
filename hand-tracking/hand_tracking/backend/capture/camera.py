@@ -18,8 +18,11 @@ class Camera:
         self._requested_index = int(camera_index)
         self._request_generation = 0
         self._frame = None
+        # Counts published frames, so readers can wait for a newer one.
+        self._sequence = 0
         self._status = CameraStatus(CameraPhase.OPENING, int(camera_index), None)
         self._lock = threading.Lock()
+        self._new_frame = threading.Condition(self._lock)
         self._wake = threading.Event()
         self._stopping = threading.Event()
         self._worker = threading.Thread(target=self._capture_loop, daemon=True)
@@ -61,6 +64,17 @@ class Camera:
             # The application flips frames in place; keep that from mutating
             # the worker's shared latest-frame buffer between reads.
             return self._frame.copy() if self._frame is not None else None
+
+    def read_newer(self, sequence: int, timeout: float):
+        """Wait up to ``timeout`` for a frame newer than ``sequence``.
+
+        Returns ``(frame copy or None, latest sequence)``. An unchanged sequence
+        means nothing new arrived, so the caller can skip re-processing.
+        """
+        with self._new_frame:
+            self._new_frame.wait_for(lambda: self._sequence != sequence, timeout)
+            frame = self._frame.copy() if self._frame is not None and self._sequence != sequence else None
+            return frame, self._sequence
 
     def _configure(self, capture):
         capture.set(cv2.CAP_PROP_FPS, 60)
@@ -153,6 +167,8 @@ class Camera:
                     has_pending_switch = self._request_generation != attempted_generation
                     if not has_pending_switch:
                         self._frame = frame
+                        self._sequence += 1
+                        self._new_frame.notify_all()
                         self._set_status_locked(CameraStatus(
                             CameraPhase.READY, attempted_index, active_index, ready_message,
                         ))
@@ -162,6 +178,8 @@ class Camera:
 
     def release(self):
         self._stopping.set()
+        with self._new_frame:
+            self._new_frame.notify_all()
         self._wake.set()
         if self._worker.is_alive():
             self._worker.join(timeout=2)

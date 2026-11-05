@@ -17,6 +17,8 @@ from PIL import Image
 
 from hand_tracking.backend.settings.overlay_settings import OverlayPosition, OverlaySettings
 from hand_tracking.backend.settings.settings_manager import Settings
+from hand_tracking.backend.engine.engine import TrackingSwitches
+from hand_tracking.backend.engine.runner import EngineSnapshot
 from hand_tracking.frontend.application import Application
 from hand_tracking.frontend.tracking.hand.debug_panel.live_hand_data import LiveHandData
 from hand_tracking.frontend.tracking.hand.overlay.composer import WIDTHS, OverlayComposer
@@ -143,21 +145,35 @@ class FrameRoutingTests(unittest.TestCase):
         self.app.preview = Mock()
         self.app.hand_tracking = Mock(preview_active=False)
         self.app._preview_hidden = False
+        self.app._seen_sequence = 0
         self.app._hand_reports = []
         self.app._show_statuses = Mock()
         self.app._refresh_gesture_display = Mock()
+        self.sequence = 0
+
+    def snapshot(self):
+        self.sequence += 1
+        result = SimpleNamespace(frame=object(), hand_reports=[])
+        return EngineSnapshot(self.sequence, result, TrackingSwitches())
 
     def test_camera_overlay_takes_the_frames_and_hides_the_preview_once(self) -> None:
         self.app.hand_tracking.shows_camera = True
-        self.app._process_frame_work()
-        self.app._process_frame_work()
+        self.app._display(self.snapshot())
+        self.app._display(self.snapshot())
         self.app.preview.set_visible.assert_called_once_with(False)
         self.app.preview.show.assert_not_called()
         self.assertEqual(self.app.hand_tracking.show_frame.call_count, 2)
 
         self.app.hand_tracking.shows_camera = False
-        self.app._process_frame_work()
+        self.app._display(self.snapshot())
         self.app.preview.set_visible.assert_called_with(True)
+        self.app.preview.show.assert_called_once()
+
+    def test_an_already_displayed_snapshot_is_not_shown_again(self) -> None:
+        self.app.hand_tracking.shows_camera = False
+        snapshot = self.snapshot()
+        self.app._display(snapshot)
+        self.app._display(snapshot)
         self.app.preview.show.assert_called_once()
 
 

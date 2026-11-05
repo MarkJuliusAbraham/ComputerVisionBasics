@@ -151,9 +151,10 @@ flowchart TD
 - `HandDrawer`, `GesturePathOverlay`, and `InvokerOverlay` contribute to the
   annotated frame under `TrackingEngine`'s coordination. `CameraPreview` receives
   the finished image, not the raw path objects.
-- Capture, inference, model loading, and the camera preview run outside the Tk
-  thread. Classification, gesture handling, command scheduling, and ordinary
-  Tk UI updates run on its event loop.
+- Capture, inference, model loading, frame processing (classification, gesture
+  handling, command scheduling; the `tracking-engine` thread), and the Windows
+  camera preview run outside the Tk thread. Tk's event loop only draws the
+  latest results.
 - The settings preview can use draft thresholds with command invocation
   disabled. Ongoing finger reports with unchanged gesture/status identity are
   refreshed approximately every 100 ms.

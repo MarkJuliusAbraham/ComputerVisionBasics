@@ -61,8 +61,8 @@ flowchart TD
     Hub --> HubView("Tracking hub window"):::view
 
     App --> Handoff["startup.pop_all()<br/>Application now owns cleanup"]:::component
-    Handoff --> Run["Application.run()<br/>after(0, _process_frame); mainloop()"]:::component
-    Run -.->|"Every tick"| Frame["_process_frame<br/>engine.process_frame, then display the result"]:::component
+    Handoff --> Run["Application.run()<br/>EngineRunner.start(); after(0, _poll_engine); mainloop()"]:::component
+    Run -.->|"Every 15 ms"| Frame["_poll_engine<br/>Display the engine thread's latest snapshot"]:::component
     Frame --> Preview("Camera preview window<br/>Created with the first frame"):::view
 
     classDef component fill:#d1e7f7,stroke:#0078d4,color:#202020,stroke-width:2px;
@@ -104,9 +104,10 @@ flowchart TD
      handling, and then shows the hub.
 7. **Hand over ownership.** `startup.pop_all()` removes the startup cleanup
    callbacks; `Application.close` is now responsible for every resource.
-8. **Run.** `run()` schedules the first `_process_frame` and enters the Tk
-   event loop. Until the camera delivers a frame, each tick retries after
-   10 ms. Until the model worker finishes, the debugging page reports
+8. **Run.** `run()` starts the engine thread (`EngineRunner`), schedules the
+   first `_poll_engine`, and enters the Tk event loop. The engine processes
+   each new camera frame on its own thread; the UI displays the newest result
+   every 15 ms. Until the model worker finishes, the debugging page reports
    "Loading landmarker model…" and no detection runs.
 
 ## Threads started during startup
@@ -114,6 +115,7 @@ flowchart TD
 | Thread | Started by | Stopped by |
 | --- | --- | --- |
 | Tk main thread | The process | `mainloop()` returning |
+| Tracking engine (`tracking-engine`) | `Application.run` → `EngineRunner.start` | `EngineRunner.stop` (via `Application.close`, before input is released) |
 | Camera capture worker | `Camera()` | `Camera.release` (via `TrackingEngine.close`) |
 | Camera preview worker (`camera-preview`) | `CameraPreview()` | `CameraPreview.close` (via `Application.close`) |
 | Model loader (`hand-model-loader`) | `HandTracker()` | `HandTracker.close` (via `HandPipeline.close`) |

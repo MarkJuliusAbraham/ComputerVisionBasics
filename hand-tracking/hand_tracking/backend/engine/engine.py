@@ -1,8 +1,10 @@
 """Turn camera frames into hand reports, gesture commands, and an annotated frame.
 
-The engine has no user interface. A frontend calls ``process_frame`` on its
-own schedule, displays the returned ``FrameResult``, and forwards user intent
-through the engine's public methods.
+The engine has no user interface. ``EngineRunner`` calls ``process_frame``
+on the engine's own thread and publishes each ``FrameResult``; a frontend
+displays the results and sends requests through the runner. Settings are
+validated and saved by the caller (``save_changes``) and then applied to the
+running components on the engine thread (``apply_settings``).
 """
 
 from contextlib import ExitStack
@@ -11,7 +13,7 @@ from dataclasses import dataclass
 import cv2
 
 from hand_tracking.backend.capture.camera import Camera
-from hand_tracking.backend.capture.camera_status import CameraStatus
+from hand_tracking.backend.capture.camera_status import CameraPhase, CameraStatus
 from hand_tracking.backend.engine.components import FrameOverlays, HandPipeline
 from hand_tracking.backend.engine.frame_profiler import FrameProfiler
 from hand_tracking.backend.gestures.gesture_config import GestureConfig
@@ -57,6 +59,7 @@ class TrackingEngine:
         self.switches = TrackingSwitches()
         self.frame_profiler = FrameProfiler(enabled=bool(settings.data.profile))
         self._model_status = None
+        self._frame_sequence = 0
         self.apply_settings()
 
     @property
@@ -73,18 +76,15 @@ class TrackingEngine:
             self.pipeline.gestures.suspend()
         self.frame_profiler.enabled = bool(data.profile)
 
-    def use_settings_file(self, path: str) -> None:
-        self.settings.use_file(path)
-        self.apply_settings()
+    def save_changes(self, values: SettingsValues) -> SettingsData:
+        """Validate and persist submitted settings fields; ``apply_settings`` uses them.
 
-    def apply_changes(self, values: SettingsValues) -> SettingsData:
-        """Validate, persist, and apply the submitted settings fields."""
+        Runs on the caller's thread, so a rejected value is reported at once.
+        """
         model_path = values.get("hand_landmarker_model_path")
         if model_path and model_path != self.settings.data.hand_landmarker_model_path:
             self.model_asset.validate_path(model_path)
-        data = self.settings.update_fields(values)
-        self.apply_settings()
-        return data
+        return self.settings.update_fields(values)
 
     def apply_gesture_config(self, config: GestureConfig) -> None:
         """Apply a validated, saved gesture mapping to the running handler."""
@@ -100,12 +100,11 @@ class TrackingEngine:
         if self.overlays.command_overlay is not None:
             self.overlays.command_overlay.reset()
 
-    def toggle_pause(self) -> bool:
-        """Pause or resume tracking; returns whether tracking is now paused."""
-        self.switches.paused = not self.switches.paused
-        if self.switches.paused:
+    def set_paused(self, paused: bool) -> None:
+        """Pause or resume tracking."""
+        self.switches.paused = paused
+        if paused:
             self.pipeline.gestures.suspend()
-        return self.switches.paused
 
     def set_commands_active(self, active: bool) -> None:
         """Commands run only while a frontend view allows them."""
@@ -113,11 +112,13 @@ class TrackingEngine:
         if not active:
             self.pipeline.gestures.suspend()
 
-    def process_frame(self, *, preview_requested: bool = False) -> FrameResult:
-        """Process the latest camera frame.
+    def process_frame(self, *, preview_requested: bool = False, wait_seconds: float = 0.0) -> FrameResult | None:
+        """Process the next camera frame, waiting up to ``wait_seconds`` for one.
 
-        ``preview_requested`` asks for detection without invoking commands,
-        for views that preview live hand data.
+        Returns None when the camera is delivering frames but none is newer than
+        the last one processed; pending commands still advance. ``preview_requested``
+        asks for detection without invoking commands, for views that preview
+        live hand data.
         """
         pipeline, overlays, switches = self.pipeline, self.overlays, self.switches
         model_status = pipeline.tracker.model_status
@@ -132,7 +133,9 @@ class TrackingEngine:
         with self.frame_profiler.measure("camera.status"):
             camera_status = self.camera.status()
         with self.frame_profiler.measure("camera.read_copy"):
-            frame = self.camera.read()
+            frame, self._frame_sequence = self.camera.read_newer(self._frame_sequence, wait_seconds)
+        if frame is None and camera_status.phase == CameraPhase.READY:
+            return None  # Nothing new; the previous result is still current.
         if frame is None:
             pipeline.detector.reset()
             # A failed device should leave the controls available for choosing
