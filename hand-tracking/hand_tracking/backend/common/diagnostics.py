@@ -9,6 +9,7 @@ import os
 import sys
 import threading
 import time
+import traceback
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from types import TracebackType
@@ -26,6 +27,10 @@ class RuntimeDiagnostics:
     Call ``heartbeat`` from a recurring UI timer. The watchdog
     stays unarmed until the first heartbeat and writes one stack dump per stall;
     a subsequent heartbeat arms it again. It never calls Tk or native UI APIs.
+
+    Shorter stalls (``slow_ui_seconds``, e.g. a click that seems ignored) are
+    logged too, with the UI thread's current stack, so a log shows whether the
+    UI was busy, and with what, or idle while input went missing.
     """
 
     def __init__(
@@ -33,10 +38,16 @@ class RuntimeDiagnostics:
         log_directory: Path | None = None,
         *,
         stall_timeout_seconds: float = 10.0,
+        slow_ui_seconds: float = 0.3,
+        max_slow_reports: int = 50,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         if not math.isfinite(stall_timeout_seconds) or stall_timeout_seconds <= 0:
             raise ValueError("The stall timeout must be positive and finite.")
+        self._slow_ui = slow_ui_seconds
+        self._slow_reports_left = max_slow_reports
+        self._slow_since: float | None = None
+        self._ui_thread_id: int | None = None
         self.log_directory = Path(log_directory) if log_directory is not None else PROJECT_ROOT / "logs"
         self._stall_timeout = stall_timeout_seconds
         self._clock = clock
@@ -56,6 +67,7 @@ class RuntimeDiagnostics:
     def __enter__(self) -> RuntimeDiagnostics:
         if self._watchdog is not None:
             raise RuntimeError("Runtime diagnostics are already running.")
+        self._ui_thread_id = threading.get_ident()
         self._identity = (
             f"PID {os.getpid()}; UI thread {threading.get_ident():#x}; "
             f"native thread {threading.get_native_id()}"
@@ -85,9 +97,14 @@ class RuntimeDiagnostics:
     def heartbeat(self) -> None:
         """Mark fresh UI progress; this performs no file or native UI work."""
         with self._lock:
-            self._last_heartbeat = self._clock()
+            now = self._clock()
+            slow_since, self._slow_since = self._slow_since, None
+            previous = self._last_heartbeat
+            self._last_heartbeat = now
             recovered = self._reported_stall
             self._reported_stall = False
+        if slow_since is not None and previous is not None:
+            LOGGER.warning("UI responsive again after %.0f ms", (now - previous) * 1000)
         if recovered:
             LOGGER.info("UI heartbeat resumed after a stall")
 
@@ -155,7 +172,7 @@ class RuntimeDiagnostics:
             LOGGER.warning("Could not enable persistent native fault dumps", exc_info=True)
 
     def _watch_heartbeat(self) -> None:
-        interval = min(self._stall_timeout / 4, 1.0)
+        interval = min(self._stall_timeout / 4, self._slow_ui / 3, 1.0)
         while not self._stop.wait(interval):
             self._check_heartbeat()
 
@@ -164,9 +181,20 @@ class RuntimeDiagnostics:
             if self._last_heartbeat is None or self._reported_stall:
                 return
             elapsed = self._clock() - self._last_heartbeat
+            report_slow = (
+                elapsed >= self._slow_ui and self._slow_since is None and self._slow_reports_left > 0
+            )
+            if report_slow:
+                self._slow_since = self._last_heartbeat
+                self._slow_reports_left -= 1
             if elapsed < self._stall_timeout:
-                return
-            self._reported_stall = True
+                stalled = False
+            else:
+                stalled = self._reported_stall = True
+        if report_slow:
+            self._log_slow_ui(elapsed)
+        if not stalled:
+            return
         LOGGER.error("UI heartbeat stalled for %.1f seconds; writing all thread stacks", elapsed)
         if self._dump_file is not None:
             try:
@@ -178,6 +206,14 @@ class RuntimeDiagnostics:
                 faulthandler.dump_traceback(file=self._dump_file, all_threads=True)
             except (OSError, RuntimeError):
                 LOGGER.warning("Could not write stalled thread stacks", exc_info=True)
+
+    def _log_slow_ui(self, elapsed: float) -> None:
+        """Log where the UI thread is while it is not responding."""
+        frame = sys._current_frames().get(self._ui_thread_id) if self._ui_thread_id else None
+        where = "".join(traceback.format_stack(frame)[-8:]) if frame is not None else "(unknown)\n"
+        LOGGER.warning(
+            "UI not responding for %.0f ms so far; the UI thread is running:\n%s", elapsed * 1000, where,
+        )
 
     def _report_exception(
         self, exc_type: type[BaseException], exc_value: BaseException, traceback: TracebackType | None,

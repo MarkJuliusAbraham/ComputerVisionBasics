@@ -3,7 +3,7 @@
 import unittest
 from unittest.mock import MagicMock, Mock
 
-from hand_tracking.frontend.application import POLL_INTERVAL_MS, Application
+from hand_tracking.frontend.application import HEARTBEAT_INTERVAL_MS, POLL_INTERVAL_MS, Application
 
 
 class ApplicationLifecycleTests(unittest.TestCase):
@@ -45,7 +45,7 @@ class ApplicationLifecycleTests(unittest.TestCase):
         self.app.running = False
         self.app._poll_ui_heartbeat()
         self.app._heartbeat.assert_called_once()
-        self.app.gui.after.assert_called_once_with(1000, self.app._poll_ui_heartbeat)
+        self.app.gui.after.assert_called_once_with(HEARTBEAT_INTERVAL_MS, self.app._poll_ui_heartbeat)
         self.app._closed = True
         self.app._poll_ui_heartbeat()
         self.app._heartbeat.assert_called_once()

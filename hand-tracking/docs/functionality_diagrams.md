@@ -90,7 +90,7 @@ whether a matched gesture can send a new command.
 flowchart TD
     Webcam{{"Webcam"}}:::external --> Camera["Camera<br/>Capture worker"]:::component
     Camera --> Frame[/"Frame<br/>BGR NumPy image"/]:::data
-    Frame --> App["TrackingEngine<br/>Frame coordinator, scheduled on Tk"]:::component
+    Frame --> App["TrackingEngine<br/>Frame coordinator on its own thread (EngineRunner)"]:::component
     App --> Tracker["HandTracker"]:::component
     Tracker --> Session["HandLandmarkerSession"]:::component
     Session -->|"Image + timestamp"| MP{{"MediaPipe<br/>Hand Landmarker"}}:::external
@@ -114,7 +114,7 @@ flowchart TD
     Report --> SettingsPreview("Deviation settings preview"):::view
 
     App --> DisplayFrame[/"Annotated frame<br/>Landmarks, paths,<br/>repeat markers and feedback"/]:::data
-    DisplayFrame --> Video("CameraPreview<br/>OpenCV display worker"):::view
+    DisplayFrame --> Video("Camera preview<br/>OpenCV worker (Windows) or Tk window (macOS)"):::view
     Handler --> Paths[/"Drawing paths<br/>and repeat markers"/]:::data
     Paths -->|"Used during composition"| DisplayFrame
 

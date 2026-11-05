@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 # How often the UI picks up the engine's latest result: faster than the camera.
 POLL_INTERVAL_MS = 15
+HEARTBEAT_INTERVAL_MS = 100
 
 
 @dataclass
@@ -209,7 +210,8 @@ class Application:
         """Measure UI responsiveness, including time spent in a modal error dialog."""
         if not self._closed and self._heartbeat is not None:
             self._heartbeat()
-            self.gui.after(1000, self._poll_ui_heartbeat)
+            # Frequent enough for the diagnostics to notice short UI stalls.
+            self.gui.after(HEARTBEAT_INTERVAL_MS, self._poll_ui_heartbeat)
 
     def _poll_engine(self):
         """Display the engine's newest result, then yield to the event loop."""

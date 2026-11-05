@@ -28,7 +28,7 @@ them. The shapes and theme-derived colors match `functionality_diagrams.md`.
 flowchart TD
     Webcam{{"Webcam"}}:::external --> Capture["Camera · capture worker<br/>OpenCV VideoCapture.read"]:::component
     Capture --> Frames[/"Latest frame buffer<br/>BGR NumPy image"/]:::data
-    Frames --> App["TrackingEngine.process_frame<br/>Scheduled by Application on Tk;<br/>read a frame copy; check tracking state"]:::component
+    Frames --> App["EngineRunner · tracking-engine thread<br/>Apply queued UI requests; wait for a new frame;<br/>TrackingEngine.process_frame"]:::component
 
     App --> Tracker["HandTracker"]:::component
     Tracker --> Session["HandLandmarkerSession<br/>BGR → RGB; timestamp; detect_async"]:::component
@@ -45,14 +45,17 @@ flowchart TD
     Sequence -->|"Eligible initial action or repeat"| Executor["CommandExecutor<br/>Queue key taps, releases and delays"]:::component
     Executor --> Input["InputSimulator<br/>pynput.keyboard.Controller"]:::component
     Input --> OS{{"OS keyboard events<br/>Consumed by the receiving application"}}:::external
-    App -. "Advance due command actions each tick" .-> Executor
+    App -. "Advance due command actions every loop (≤ 5 ms)" .-> Executor
 
     State --> Records[/"HandReport list<br/>Hand state + matched gesture"/]:::data
     Definition --> Records
-    Records --> Module["HandTrackingModule.update_data<br/>HandDebugPanel constructs the shared report"]:::component
+    Records --> Snapshot[/"EngineSnapshot<br/>Latest FrameResult + switches"/]:::data
+    Snapshot --> Display["Application · Tk thread, every 15 ms<br/>Display the newest snapshot"]:::component
+    Display -. "Requests: pause, commands on/off,<br/>settings, mapping, restart" .-> App
+    Display --> Module["HandTrackingModule.update_data<br/>HandDebugPanel constructs the shared report"]:::component
     Module --> Report[/"LiveHandData<br/>Hand records + tracking status"/]:::data
     Report --> Debug("Hand debugging UI<br/>Left/right summaries and deviation bars"):::view
-    Report --> Overlay("Optional desktop overlay<br/>RGBA renderer → Windows layered window"):::view
+    Report --> Overlay("Optional desktop overlay<br/>Stats, or camera + stats<br/>Windows layered window / macOS NSPanel"):::view
     Report --> SettingsPreview("Optional settings preview<br/>Live finger data + draft thresholds"):::view
 
     App --> Compose["TrackingEngine · camera-frame composition<br/>Landmarks, mirror, paths and feedback"]:::component
@@ -62,7 +65,9 @@ flowchart TD
     Executor -. "Released-key callback" .-> Invoker["InvokerOverlay<br/>Command feedback"]:::component
     Invoker --> Compose
     Compose --> DisplayFrame[/"Annotated camera frame"/]:::data
-    DisplayFrame --> Preview("CameraPreview · display worker<br/>Latest frame → imshow + waitKey"):::view
+    DisplayFrame --> Snapshot
+    Display --> Preview("Camera preview<br/>OpenCV worker (Windows) or Tk window (macOS);<br/>hidden while the overlay shows the camera"):::view
+    Display -->|"Camera + stats"| Overlay
 
     classDef component fill:#d1e7f7,stroke:#0078d4,color:#202020,stroke-width:2px;
     classDef data fill:#f1ecdc,stroke:#76601f,color:#202020,stroke-width:2px;

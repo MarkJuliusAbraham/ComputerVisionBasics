@@ -192,3 +192,29 @@ class RuntimeDiagnosticsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SlowUiLogTests(unittest.TestCase):
+    """Short UI stalls are logged with where the UI thread is, once per stall."""
+
+    def test_short_stall_is_logged_once_with_the_ui_threads_location(self):
+        import threading
+        from hand_tracking.backend.common.diagnostics import RuntimeDiagnostics
+        now = [100.0]
+        diagnostics = RuntimeDiagnostics(slow_ui_seconds=0.3, clock=lambda: now[0])
+        diagnostics._ui_thread_id = threading.get_ident()
+        diagnostics.heartbeat()
+        now[0] += 0.1
+        with self.assertNoLogs("hand_tracking.backend.common.diagnostics", "WARNING"):
+            diagnostics._check_heartbeat()
+        now[0] += 0.3
+        with self.assertLogs("hand_tracking.backend.common.diagnostics", "WARNING") as logs:
+            diagnostics._check_heartbeat()
+            diagnostics._check_heartbeat()  # Same stall: no second report
+        self.assertEqual(len(logs.output), 1)
+        self.assertIn("UI not responding for 400 ms", logs.output[0])
+        self.assertIn("test_short_stall_is_logged_once", logs.output[0])
+        now[0] += 0.2
+        with self.assertLogs("hand_tracking.backend.common.diagnostics", "WARNING") as logs:
+            diagnostics.heartbeat()
+        self.assertIn("UI responsive again after 600 ms", logs.output[0])

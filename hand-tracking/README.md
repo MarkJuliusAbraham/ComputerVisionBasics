@@ -27,8 +27,22 @@ macOS:
 
 ## macOS notes
 
-- **Tkinter.** Python from python.org includes it. With Homebrew Python, run
-  `brew install python-tk` first.
+- **Python and Tk version (important).** Use **Python 3.13 or newer from
+  python.org** on macOS. Its installer bundles Tk 8.6.15 or later. Tk is part
+  of the Python install, not a pip package, so `pip` cannot update it.
+  Tk **8.6.12 and older** has a known macOS bug where clicks are ignored,
+  especially when switching tabs ([python/cpython#110218](https://github.com/python/cpython/issues/110218));
+  it was fixed in Tk 8.6.13. Check the version with:
+
+  ```bash
+  .venv/bin/python -c "import tkinter, sys; print(sys.version); print(tkinter.Tcl().eval('info patchlevel'))"
+  ```
+
+  If it prints 8.6.12 or lower, install a newer Python and recreate `.venv`
+  from it (`python3.13 -m venv .venv`, then install `requirements.txt`).
+  MediaPipe's macOS package works with any Python 3 version on Apple Silicon.
+  With Homebrew Python instead, install `python-tk` for the same version
+  (for example `brew install python-tk@3.13`).
 - **Permissions.** In System Settings → Privacy & Security, allow the app you
   launch from (Terminal, iTerm or your editor):
   - **Camera**, for the webcam. macOS asks on first use.
